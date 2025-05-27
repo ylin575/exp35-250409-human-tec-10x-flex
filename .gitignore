@@ -1,5 +1,8 @@
-# ignore everything except the ones that I specify
-
+# Ignore everything
 *
-! scripts/*
-! README.md
+
+# But not these files or directories:
+!.gitignore
+!README.md
+!src/
+!scripts/run.sh
