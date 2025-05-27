@@ -4,5 +4,3 @@
 # But not these files or directories:
 !.gitignore
 !README.md
-!src/
-!scripts/run.sh
