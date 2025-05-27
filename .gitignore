@@ -1,5 +1,5 @@
 # ignore everything except the ones that I specify
 
 *
-!scripts/*
-!README.md
+! scripts/*
+! README.md
