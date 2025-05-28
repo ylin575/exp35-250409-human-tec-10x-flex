@@ -1,9 +1,11 @@
 # Ignore everything
-/*
+**
+
 
 # Except these files or directories:
 !.gitignore
 !scripts
 !README.md
 
+# ignore .DS_Store seen anywhere in the directory
 **/.DS_Store
