@@ -7,7 +7,6 @@ library(patchwork)
 library(harmony)
 library(scIntegrationMetrics)
 
-
 # load the count matrices
 ht67_cd205neg.data <- Read10X_h5("rawdata/h5-files/ht67-cd205neg/sample_filtered_feature_bc_matrix.h5", 
                                  use.names = TRUE, unique.features = TRUE)
@@ -31,7 +30,6 @@ ht70 <- CreateSeuratObject(counts = ht70.data, project = "htec-10xflex",
 ht71 <- CreateSeuratObject(counts = ht71.data, project = "htec-10xflex", 
                                     min.cells = 3,
                                     min.features = 200)
-
 
 # > length(rownames(ht67_cd205neg.data))
 # [1] 18082
@@ -240,7 +238,7 @@ median(ht71_sub@meta.data$nCount_RNA)
 
 
 
-# # check original dimensions of the subsetted objects
+# check original dimensions of the sub-setted objects
 dim(ht67_cd205neg)
 dim(ht67_cd205pos)
 dim(ht70)

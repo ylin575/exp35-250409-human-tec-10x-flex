@@ -9,3 +9,4 @@
 
 # ignore .DS_Store seen anywhere in the directory
 **/.DS_Store
+.Rproj.user
