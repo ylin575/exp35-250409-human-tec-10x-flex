@@ -66,13 +66,10 @@ ht70[["sample.id"]] <- "ht70"
 ht71[["sample.id"]] <- "ht71"
 
 # perform QC
-
 ht67_cd205neg[["percent.mt"]] <- PercentageFeatureSet(ht67_cd205neg, pattern = "^MT-")
 ht67_cd205pos[["percent.mt"]] <- PercentageFeatureSet(ht67_cd205pos, pattern = "^MT-")
 ht70[["percent.mt"]] <- PercentageFeatureSet(ht70, pattern = "^MT-")
 ht71[["percent.mt"]] <- PercentageFeatureSet(ht71, pattern = "^MT-")
-
-
 
 # original dataset dimensions
 dim(ht67_cd205neg)
@@ -82,8 +79,6 @@ dim(ht71)
 
 # subset and calculate mean and 3*SD for percent.mt (ignore lower bound since
 # they tend to be less than 0) and nFeature_RNA
-
-
 meta.data <- bind_rows(ht67_cd205neg@meta.data,
                        ht67_cd205pos@meta.data,
                        ht70@meta.data,
@@ -97,7 +92,11 @@ meta.data %>%
   
 process_seu <- function(seur, min.feature=500, sd.thr=3) {
   stats <- seur@meta.data %>%
-    summarise(mean_pct_mt = mean(percent.mt),
+    summarise(mean_nFeature = mean(nFeature_RNA),
+              mean_Count = mean(nCount_RNA),
+              median_nFeature = median(nFeature_RNA),
+              median_Count = median(nCount_RNA),
+              mean_pct_mt = mean(percent.mt),
               sd_pct_mt = sd(percent.mt),
               upper.mt = mean_pct_mt + sd.thr * sd_pct_mt,
               upper.feature=mean(nFeature_RNA) + sd.thr *sd(nFeature_RNA)
@@ -110,6 +109,8 @@ process_seu <- function(seur, min.feature=500, sd.thr=3) {
 
 ht67_cd205pos_sub <- process_seu(ht67_cd205pos)
 ht67_cd205neg_sub <- process_seu(ht67_cd205neg)
+ht70_sub <- process_seu(ht70)
+ht71_sub <- process_seu(ht71)
 
 
 
@@ -146,50 +147,89 @@ ht71_sub <- subset(ht71_sub, subset = nFeature_RNA >= 500 & nFeature_RNA <= ht71
 
 
 # Visualize QC metrics as a violin plot
-VlnPlot(ht67_cd205neg_sub, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
-VlnPlot(ht67_cd205pos_sub, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
-VlnPlot(ht70_sub, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
-VlnPlot(ht71_sub, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+VlnPlot(ht67_cd205neg_sub, 
+        features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), 
+        ncol = 3)
+VlnPlot(ht67_cd205pos_sub, 
+        features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), 
+        ncol = 3)
+VlnPlot(ht70_sub, 
+        features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), 
+        ncol = 3)
+VlnPlot(ht71_sub, 
+        features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), 
+        ncol = 3)
 
 # FeatureScatter is typically used to visualize feature-feature relationships, but can be used
 # for anything calculated by the object, i.e. columns in object metadata, PC scores etc.
 
-plot1 <- FeatureScatter(ht67_cd205neg, feature1 = "nCount_RNA", feature2 = "percent.mt")
-plot2 <- FeatureScatter(ht67_cd205neg, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+plot1 <- FeatureScatter(ht67_cd205neg, 
+                        feature1 = "nCount_RNA", 
+                        feature2 = "percent.mt")
+plot2 <- FeatureScatter(ht67_cd205neg, 
+                        feature1 = "nCount_RNA", 
+                        feature2 = "nFeature_RNA")
 plot1 + plot2
 
-plot1 <- FeatureScatter(ht67_cd205pos, feature1 = "nCount_RNA", feature2 = "percent.mt")
-plot2 <- FeatureScatter(ht67_cd205pos, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+plot1 <- FeatureScatter(ht67_cd205pos, 
+                        feature1 = "nCount_RNA", 
+                        feature2 = "percent.mt")
+plot2 <- FeatureScatter(ht67_cd205pos, 
+                        feature1 = "nCount_RNA", 
+                        feature2 = "nFeature_RNA")
 plot1 + plot2
 
-plot1 <- FeatureScatter(ht70, feature1 = "nCount_RNA", feature2 = "percent.mt")
-plot2 <- FeatureScatter(ht70, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+plot1 <- FeatureScatter(ht70, 
+                        feature1 = "nCount_RNA", 
+                        feature2 = "percent.mt")
+plot2 <- FeatureScatter(ht70, 
+                        feature1 = "nCount_RNA", 
+                        feature2 = "nFeature_RNA")
 plot1 + plot2
 
-plot1 <- FeatureScatter(ht71, feature1 = "nCount_RNA", feature2 = "percent.mt")
-plot2 <- FeatureScatter(ht71, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+plot1 <- FeatureScatter(ht71, 
+                        feature1 = "nCount_RNA", 
+                        feature2 = "percent.mt")
+plot2 <- FeatureScatter(ht71, 
+                        feature1 = "nCount_RNA", 
+                        feature2 = "nFeature_RNA")
 plot1 + plot2
 
-
-plot1 <- FeatureScatter(ht67_cd205neg_sub, feature1 = "nCount_RNA", feature2 = "percent.mt")
-plot2 <- FeatureScatter(ht67_cd205neg_sub, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+plot1 <- FeatureScatter(ht67_cd205neg_sub, 
+                        feature1 = "nCount_RNA", 
+                        feature2 = "percent.mt")
+plot2 <- FeatureScatter(ht67_cd205neg_sub, 
+                        feature1 = "nCount_RNA", 
+                        feature2 = "nFeature_RNA")
 plot1 + plot2
 
-plot1 <- FeatureScatter(ht67_cd205pos_sub, feature1 = "nCount_RNA", feature2 = "percent.mt")
-plot2 <- FeatureScatter(ht67_cd205pos_sub, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+plot1 <- FeatureScatter(ht67_cd205pos_sub, 
+                        feature1 = "nCount_RNA", 
+                        feature2 = "percent.mt")
+plot2 <- FeatureScatter(ht67_cd205pos_sub, 
+                        feature1 = "nCount_RNA", 
+                        feature2 = "nFeature_RNA")
 plot1 + plot2
 
-plot1 <- FeatureScatter(ht70_sub, feature1 = "nCount_RNA", feature2 = "percent.mt")
-plot2 <- FeatureScatter(ht70_sub, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+plot1 <- FeatureScatter(ht70_sub, 
+                        feature1 = "nCount_RNA", 
+                        feature2 = "percent.mt")
+plot2 <- FeatureScatter(ht70_sub, 
+                        feature1 = "nCount_RNA", 
+                        feature2 = "nFeature_RNA")
 plot1 + plot2
 
-plot1 <- FeatureScatter(ht71_sub, feature1 = "nCount_RNA", feature2 = "percent.mt")
-plot2 <- FeatureScatter(ht71_sub, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+plot1 <- FeatureScatter(ht71_sub, 
+                        feature1 = "nCount_RNA", 
+                        feature2 = "percent.mt")
+plot2 <- FeatureScatter(ht71_sub, 
+                        feature1 = "nCount_RNA", 
+                        feature2 = "nFeature_RNA")
 plot1 + plot2
 
 
 ###########################
-# mean and median pre qc filter
+# mean and median pre QC filter
 
 mean(ht67_cd205neg@meta.data$nFeature_RNA)
 mean(ht67_cd205pos@meta.data$nFeature_RNA)
@@ -238,7 +278,7 @@ median(ht71_sub@meta.data$nCount_RNA)
 
 
 
-# check original dimensions of the sub-setted objects
+# check dimensions of data before and after subsetting
 dim(ht67_cd205neg)
 dim(ht67_cd205pos)
 dim(ht70)
@@ -247,6 +287,7 @@ dim(ht67_cd205neg_sub)
 dim(ht67_cd205pos_sub)
 dim(ht70_sub)
 dim(ht71_sub)
+
 # > dim(ht67_cd205neg)
 # [1] 17237  8280
 # > dim(ht67_cd205pos)
@@ -255,6 +296,7 @@ dim(ht71_sub)
 # [1] 17007 13246
 # > dim(ht71)
 # [1] 16958 11073
+
 # > dim(ht67_cd205neg_sub)
 # [1] 17237  8158
 # > dim(ht67_cd205pos_sub)
@@ -269,13 +311,15 @@ dim(ht71_sub)
 samples <- merge(x = ht67_cd205neg_sub, y = list(ht67_cd205pos_sub, ht70_sub, 
                                                ht71_sub))
 
-samples <- merge(x = ht67_cd205neg_sub$seur, y = list(ht67_cd205pos_sub, ht70_sub, 
-                                                 ht71_sub))
+samples <- merge(x = ht67_cd205neg_sub$seur, 
+                 y = list(ht67_cd205pos_sub$seur, ht70_sub$seur, 
+                                                 ht71_sub$seur))
 # standard analysis steps
-samples <- NormalizeData(samples)
-samples <- FindVariableFeatures(samples)
-samples <- ScaleData(samples)
-samples <- RunPCA(samples, features = VariableFeatures(object = samples))
+samples <- samples |>
+  NormalizeData(samples) |>
+  FindVariableFeatures(samples) |>
+  ScaleData(samples) |>
+  RunPCA(samples, features = VariableFeatures(object = samples))
 
 # Examine and visualize PCA results a few different ways
 print(samples[["pca"]], dims = 1:5, nfeatures = 5)
@@ -284,13 +328,12 @@ DimPlot(samples, reduction = "pca") + NoLegend()
 DimHeatmap(samples, dims = 1:15, cells = 6, balanced = TRUE)
 ElbowPlot(samples)
 
-# clustering
-samples <- FindNeighbors(samples, dims = 1:15)
-samples <- FindClusters(samples, resolution = 0.5, 
-                      cluster.name = "unintegrated_clusters")
-
-# run non-linear dimensional reduction
-samples <- RunUMAP(samples, dims = 1:15, 
+# clustering and run UMAP
+samples <- samples |>
+  FindNeighbors(samples, dims = 1:15) |>
+  FindClusters(samples, resolution = 0.5, 
+               cluster.name = "unintegrated_clusters") |>
+  RunUMAP(samples, dims = 1:15, 
                  reduction.name = "umap.unintegrated")
 
 # plot umap before integration
@@ -312,7 +355,16 @@ FeaturePlot(samples, reduction = "umap.unintegrated", features = "BCAM", split.b
 FeaturePlot(samples, reduction = "umap.unintegrated", features = "CLEC2L", split.by = "sample.id")
 
 
+save_features <- function(feature, seur, reduction = "umap.unintegrated",
+              split.by = "sample.id") {
+  p <- FeaturePlot(seur, reduction = reduction, features = feature,
+              split.by = split.by)
+  ggsave(plot=p, paste0("results/250605/featureplot_", feature, ".pdf"),
+         width=14, height=3)
+}
 
+foi <- c("AIRE", "PRSS16")
+sapply(foi, save_features,  seur=samples)
 
 #save before integration
 saveRDS(samples, file = "data/rds-objects/250520-before-integration.rds")
