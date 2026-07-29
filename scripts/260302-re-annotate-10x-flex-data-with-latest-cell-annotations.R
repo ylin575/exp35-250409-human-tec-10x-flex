@@ -3,9 +3,9 @@
 # Load Packages
 library(dplyr)
 library(Seurat)
-library(patchwork)
-library(harmony)
-library(scIntegrationMetrics)
+#library(patchwork)
+#library(harmony)
+#library(scIntegrationMetrics)
 
 # load the count matrices
 ht67_cd205neg.data <- Read10X_h5("rawdata/h5-files/ht67-cd205neg/sample_filtered_feature_bc_matrix.h5", 

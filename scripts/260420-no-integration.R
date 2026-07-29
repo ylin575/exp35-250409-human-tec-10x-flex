@@ -4,8 +4,11 @@
 library(dplyr)
 library(Seurat)
 library(patchwork)
-library(harmony)
 library(scIntegrationMetrics)
+library(harmony)
+
+
+# 1 LOAD DATA, INITIATE SEURAT OBJECTS
 
 # load the count matrices
 ht67_cd205neg.data <- Read10X_h5("rawdata/h5-files/ht67-cd205neg/sample_filtered_feature_bc_matrix.h5", 
@@ -31,30 +34,31 @@ ht71 <- CreateSeuratObject(counts = ht71.data, project = "htec-10xflex",
                                     min.cells = 3,
                                     min.features = 200)
 
-length(rownames(ht67_cd205neg.data))
+
+# > length(rownames(ht67_cd205neg.data))
 # [1] 18082
-length(rownames(ht67_cd205neg))
+# > length(rownames(ht67_cd205neg))
 # [1] 17237
-length(rownames(ht67_cd205pos.data))
+# > length(rownames(ht67_cd205pos.data))
 # [1] 18082
-length(rownames(ht67_cd205pos))
+# > length(rownames(ht67_cd205pos))
 # [1] 15816
-length(rownames(ht70.data))
+# > length(rownames(ht70.data))
 # [1] 18082
-length(rownames(ht70))
+# > length(rownames(ht70))
 # [1] 17007
-length(rownames(ht71.data))
+# > length(rownames(ht71.data))
 # [1] 18082
-length(rownames(ht71))
+# > length(rownames(ht71))
 # [1] 16958
 
-# save data
+#save rds objects
 saveRDS(ht67_cd205neg, file = "data/rds-objects/250414-ht67-cd205neg-before-QC.rds")
 saveRDS(ht67_cd205pos, file = "data/rds-objects/250414-ht67-cd205pos-before-QC.rds")
 saveRDS(ht70, file = "data/rds-objects/250414-ht70-before-QC.rds")
 saveRDS(ht71, file = "data/rds-objects/250414-ht71-before-QC.rds")
 
-# load data
+#load rds objects
 ht67_cd205neg <- readRDS(file = "data/rds-objects/250414-ht67-cd205neg-before-QC.rds")
 ht67_cd205pos <- readRDS(file = "data/rds-objects/250414-ht67-cd205pos-before-QC.rds")
 ht70 <- readRDS(file = "data/rds-objects/250414-ht70-before-QC.rds")
@@ -66,41 +70,11 @@ ht67_cd205pos[["sample.id"]] <- "ht67-cd205pos"
 ht70[["sample.id"]] <- "ht70"
 ht71[["sample.id"]] <- "ht71"
 
-# remove unique probes from each dataset (250715)
-seurat_list <- list(ht67_cd205neg, ht67_cd205pos, ht70, ht71)  # replace with your actual Seurat objects
-
-# Get the gene names for each object
-gene_lists <- lapply(seurat_list, function(seurat_obj) {
-  rownames(seurat_obj)
-})
-
-# Find the common genes across all objects
-common_genes <- Reduce(intersect, gene_lists)
-
-# Subset each Seurat object
-seurat_list_common <- lapply(seurat_list, function(seurat_obj) {
-  subset(seurat_obj, features = common_genes)
-})
-
-# Check all have the same genes
-all(sapply(seurat_list_common, function(x) identical(rownames(x), common_genes)))
-
-ht67_cd205neg <- seurat_list_common[[1]]
-ht67_cd205pos <- seurat_list_common[[2]]
-ht70 <- seurat_list_common[[3]]
-ht71 <- seurat_list_common[[4]]
 
 
-length(rownames(ht67_cd205neg))
-length(rownames(ht67_cd205pos))
-length(rownames(ht70))
-length(rownames(ht71))
+# 2 PERFORM QC STEPS
 
-
-
-
-
-# perform QC
+# add mitochondrial gene reads percentage into metadata
 ht67_cd205neg[["percent.mt"]] <- PercentageFeatureSet(ht67_cd205neg, pattern = "^MT-")
 ht67_cd205pos[["percent.mt"]] <- PercentageFeatureSet(ht67_cd205pos, pattern = "^MT-")
 ht70[["percent.mt"]] <- PercentageFeatureSet(ht70, pattern = "^MT-")
@@ -114,6 +88,8 @@ dim(ht71)
 
 # subset and calculate mean and 3*SD for percent.mt (ignore lower bound since
 # they tend to be less than 0) and nFeature_RNA
+
+
 meta.data <- bind_rows(ht67_cd205neg@meta.data,
                        ht67_cd205pos@meta.data,
                        ht70@meta.data,
@@ -127,11 +103,7 @@ meta.data %>%
   
 process_seu <- function(seur, min.feature=500, sd.thr=3) {
   stats <- seur@meta.data %>%
-    summarise(mean_nFeature = mean(nFeature_RNA),
-              mean_Count = mean(nCount_RNA),
-              median_nFeature = median(nFeature_RNA),
-              median_Count = median(nCount_RNA),
-              mean_pct_mt = mean(percent.mt),
+    summarise(mean_pct_mt = mean(percent.mt),
               sd_pct_mt = sd(percent.mt),
               upper.mt = mean_pct_mt + sd.thr * sd_pct_mt,
               upper.feature=mean(nFeature_RNA) + sd.thr *sd(nFeature_RNA)
@@ -144,9 +116,6 @@ process_seu <- function(seur, min.feature=500, sd.thr=3) {
 
 ht67_cd205pos_sub <- process_seu(ht67_cd205pos)
 ht67_cd205neg_sub <- process_seu(ht67_cd205neg)
-ht70_sub <- process_seu(ht70)
-ht71_sub <- process_seu(ht71)
-
 
 
 
@@ -183,89 +152,50 @@ ht71_sub <- subset(ht71_sub, subset = nFeature_RNA >= 500 & nFeature_RNA <= ht71
 
 
 # Visualize QC metrics as a violin plot
-VlnPlot(ht67_cd205neg_sub, 
-        features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), 
-        ncol = 3)
-VlnPlot(ht67_cd205pos_sub, 
-        features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), 
-        ncol = 3)
-VlnPlot(ht70_sub, 
-        features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), 
-        ncol = 3)
-VlnPlot(ht71_sub, 
-        features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), 
-        ncol = 3)
+VlnPlot(ht67_cd205neg_sub, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+VlnPlot(ht67_cd205pos_sub, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+VlnPlot(ht70_sub, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+VlnPlot(ht71_sub, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
 
 # FeatureScatter is typically used to visualize feature-feature relationships, but can be used
 # for anything calculated by the object, i.e. columns in object metadata, PC scores etc.
 
-plot1 <- FeatureScatter(ht67_cd205neg, 
-                        feature1 = "nCount_RNA", 
-                        feature2 = "percent.mt")
-plot2 <- FeatureScatter(ht67_cd205neg, 
-                        feature1 = "nCount_RNA", 
-                        feature2 = "nFeature_RNA")
+plot1 <- FeatureScatter(ht67_cd205neg, feature1 = "nCount_RNA", feature2 = "percent.mt")
+plot2 <- FeatureScatter(ht67_cd205neg, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
 plot1 + plot2
 
-plot1 <- FeatureScatter(ht67_cd205pos, 
-                        feature1 = "nCount_RNA", 
-                        feature2 = "percent.mt")
-plot2 <- FeatureScatter(ht67_cd205pos, 
-                        feature1 = "nCount_RNA", 
-                        feature2 = "nFeature_RNA")
+plot1 <- FeatureScatter(ht67_cd205pos, feature1 = "nCount_RNA", feature2 = "percent.mt")
+plot2 <- FeatureScatter(ht67_cd205pos, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
 plot1 + plot2
 
-plot1 <- FeatureScatter(ht70, 
-                        feature1 = "nCount_RNA", 
-                        feature2 = "percent.mt")
-plot2 <- FeatureScatter(ht70, 
-                        feature1 = "nCount_RNA", 
-                        feature2 = "nFeature_RNA")
+plot1 <- FeatureScatter(ht70, feature1 = "nCount_RNA", feature2 = "percent.mt")
+plot2 <- FeatureScatter(ht70, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
 plot1 + plot2
 
-plot1 <- FeatureScatter(ht71, 
-                        feature1 = "nCount_RNA", 
-                        feature2 = "percent.mt")
-plot2 <- FeatureScatter(ht71, 
-                        feature1 = "nCount_RNA", 
-                        feature2 = "nFeature_RNA")
+plot1 <- FeatureScatter(ht71, feature1 = "nCount_RNA", feature2 = "percent.mt")
+plot2 <- FeatureScatter(ht71, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
 plot1 + plot2
 
-plot1 <- FeatureScatter(ht67_cd205neg_sub, 
-                        feature1 = "nCount_RNA", 
-                        feature2 = "percent.mt")
-plot2 <- FeatureScatter(ht67_cd205neg_sub, 
-                        feature1 = "nCount_RNA", 
-                        feature2 = "nFeature_RNA")
+
+plot1 <- FeatureScatter(ht67_cd205neg_sub, feature1 = "nCount_RNA", feature2 = "percent.mt")
+plot2 <- FeatureScatter(ht67_cd205neg_sub, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
 plot1 + plot2
 
-plot1 <- FeatureScatter(ht67_cd205pos_sub, 
-                        feature1 = "nCount_RNA", 
-                        feature2 = "percent.mt")
-plot2 <- FeatureScatter(ht67_cd205pos_sub, 
-                        feature1 = "nCount_RNA", 
-                        feature2 = "nFeature_RNA")
+plot1 <- FeatureScatter(ht67_cd205pos_sub, feature1 = "nCount_RNA", feature2 = "percent.mt")
+plot2 <- FeatureScatter(ht67_cd205pos_sub, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
 plot1 + plot2
 
-plot1 <- FeatureScatter(ht70_sub, 
-                        feature1 = "nCount_RNA", 
-                        feature2 = "percent.mt")
-plot2 <- FeatureScatter(ht70_sub, 
-                        feature1 = "nCount_RNA", 
-                        feature2 = "nFeature_RNA")
+plot1 <- FeatureScatter(ht70_sub, feature1 = "nCount_RNA", feature2 = "percent.mt")
+plot2 <- FeatureScatter(ht70_sub, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
 plot1 + plot2
 
-plot1 <- FeatureScatter(ht71_sub, 
-                        feature1 = "nCount_RNA", 
-                        feature2 = "percent.mt")
-plot2 <- FeatureScatter(ht71_sub, 
-                        feature1 = "nCount_RNA", 
-                        feature2 = "nFeature_RNA")
+plot1 <- FeatureScatter(ht71_sub, feature1 = "nCount_RNA", feature2 = "percent.mt")
+plot2 <- FeatureScatter(ht71_sub, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
 plot1 + plot2
 
 
 ###########################
-# mean and median pre QC filter
+# mean and median pre qc filter
 
 mean(ht67_cd205neg@meta.data$nFeature_RNA)
 mean(ht67_cd205pos@meta.data$nFeature_RNA)
@@ -290,40 +220,36 @@ median(ht71_sub@meta.data$nCount_RNA)
 ###########################
 # mean and median post qc filter
 
-mean(ht67_cd205neg_sub[[2]]@meta.data$nFeature_RNA)
-mean(ht67_cd205pos_sub[[2]]@meta.data$nFeature_RNA)
-mean(ht70_sub[[2]]@meta.data$nFeature_RNA)
-mean(ht71_sub[[2]]@meta.data$nFeature_RNA)
+mean(ht67_cd205neg_sub@meta.data$nFeature_RNA)
+mean(ht67_cd205pos_sub@meta.data$nFeature_RNA)
+mean(ht70_sub@meta.data$nFeature_RNA)
+mean(ht71_sub@meta.data$nFeature_RNA)
 
-mean(ht67_cd205neg_sub[[2]]@meta.data$nCount_RNA)
-mean(ht67_cd205pos_sub[[2]]@meta.data$nCount_RNA)
-mean(ht70_sub[[2]]@meta.data$nCount_RNA)
-mean(ht71_sub[[2]]@meta.data$nCount_RNA)
+mean(ht67_cd205neg_sub@meta.data$nCount_RNA)
+mean(ht67_cd205pos_sub@meta.data$nCount_RNA)
+mean(ht70_sub@meta.data$nCount_RNA)
+mean(ht71_sub@meta.data$nCount_RNA)
 
-median(ht67_cd205neg_sub[[2]]@meta.data$nFeature_RNA)
-median(ht67_cd205pos_sub[[2]]@meta.data$nFeature_RNA)
-median(ht70_sub[[2]]@meta.data$nFeature_RNA)
-median(ht71_sub[[2]]@meta.data$nFeature_RNA)
+median(ht67_cd205neg_sub@meta.data$nFeature_RNA)
+median(ht67_cd205pos_sub@meta.data$nFeature_RNA)
+median(ht70_sub@meta.data$nFeature_RNA)
+median(ht71_sub@meta.data$nFeature_RNA)
 
-median(ht67_cd205neg_sub[[2]]@meta.data$nCount_RNA)
-median(ht67_cd205pos_sub[[2]]@meta.data$nCount_RNA)
-median(ht70_sub[[2]]@meta.data$nCount_RNA)
-median(ht71_sub[[2]]@meta.data$nCount_RNA)
+median(ht67_cd205neg_sub@meta.data$nCount_RNA)
+median(ht67_cd205pos_sub@meta.data$nCount_RNA)
+median(ht70_sub@meta.data$nCount_RNA)
+median(ht71_sub@meta.data$nCount_RNA)
 
-
-
-
-
-# check dimensions of data before and after subsetting
+# # check original dimensions of the subsetted objects
 dim(ht67_cd205neg)
 dim(ht67_cd205pos)
 dim(ht70)
 dim(ht71)
-dim(ht67_cd205neg_sub[[2]])
-dim(ht67_cd205pos_sub[[2]])
-dim(ht70_sub[[2]])
-dim(ht71_sub[[2]])
-
+dim(ht67_cd205neg_sub)
+dim(ht67_cd205pos_sub)
+dim(ht70_sub)
+dim(ht71_sub)
+# results
 # > dim(ht67_cd205neg)
 # [1] 17237  8280
 # > dim(ht67_cd205pos)
@@ -332,7 +258,6 @@ dim(ht71_sub[[2]])
 # [1] 17007 13246
 # > dim(ht71)
 # [1] 16958 11073
-
 # > dim(ht67_cd205neg_sub)
 # [1] 17237  8158
 # > dim(ht67_cd205pos_sub)
@@ -343,127 +268,321 @@ dim(ht71_sub[[2]])
 # [1] 16958 10703
 
 
+
+#save post-QC rds objects
+saveRDS(ht67_cd205neg_sub, file = "data/rds-objects/260304-ht67-cd205neg-post-QC.rds")
+saveRDS(ht67_cd205pos_sub, file = "data/rds-objects/260304-ht67-cd205pos-post-QC.rds")
+saveRDS(ht70_sub, file = "data/rds-objects/260304-ht70-post-QC.rds")
+saveRDS(ht71_sub, file = "data/rds-objects/260304-ht71-post-QC.rds")
+
+#load post-QC rds objects
+ht67_cd205neg_sub <- readRDS(file = "data/rds-objects/260304-ht67-cd205neg-post-QC.rds")
+ht67_cd205pos_sub <- readRDS(file = "data/rds-objects/260304-ht67-cd205pos-post-QC.rds")
+ht70_sub <- readRDS(file = "data/rds-objects/260304-ht70-post-QC.rds")
+ht71_sub <- readRDS(file = "data/rds-objects/260304-ht71-post-QC.rds")
+
 # merge all samples into one object
 samples <- merge(x = ht67_cd205neg_sub, y = list(ht67_cd205pos_sub, ht70_sub, 
                                                ht71_sub))
 
-samples <- merge(x = ht67_cd205neg_sub$seur, 
-                 y = list(ht67_cd205pos_sub$seur, ht70_sub$seur, 
-                                                 ht71_sub$seur))
+# merge all sample qc stats into one object
+#samples <- merge(x = ht67_cd205neg_sub$seur, y = list(ht67_cd205pos_sub, ht70_sub, ht71_sub))
+
+# join layers
+samples <- JoinLayers(samples)
+
+# save object
+saveRDS(samples, file = "data/rds-objects/260304-samples-post-join-layer.rds")
+samples <- readRDS(file = "data/rds-objects/260304-samples-post-join-layer.rds")
+
+
+
 # standard analysis steps
 samples <- NormalizeData(samples)
 samples <- FindVariableFeatures(samples)
 samples <- ScaleData(samples)
-samples <- RunPCA(samples, features = VariableFeatures(object = samples))
+samples <- RunPCA(samples)
 
-# samples <- samples |>
-#   NormalizeData(samples) |>
-#   FindVariableFeatures(samples) |>
-#   ScaleData(samples) |>
-#   RunPCA(samples, features = VariableFeatures(object = samples))
 
 # Examine and visualize PCA results a few different ways
-print(samples[["pca"]], dims = 1:5, nfeatures = 5)
-VizDimLoadings(samples, dims = 1:2, reduction = "pca")
-DimPlot(samples, reduction = "pca") + NoLegend()
-DimHeatmap(samples, dims = 1:15, cells = 6, balanced = TRUE)
-ElbowPlot(samples)
+# print(samples[["pca"]], dims = 1:5, nfeatures = 5)
+# VizDimLoadings(samples, dims = 1:2, reduction = "pca")
+# DimPlot(samples, reduction = "pca") + NoLegend()
+# DimHeatmap(samples, dims = 1:30, cells =50, balanced = TRUE)
+ElbowPlot(samples, ndims = 60)
 
-# clustering and run UMAP
-samples <- FindNeighbors(samples, dims = 1:15)
-samples <- FindClusters(samples, resolution = 0.5, 
-               cluster.name = "unintegrated_clusters")
-samples <- RunUMAP(samples, dims = 1:15, 
-                 reduction.name = "umap.unintegrated")
+
+# clustering
+samples <- FindNeighbors(samples, dims = 1:18)
+samples <- FindClusters(samples, resolution = 0.5)
+
+
+# # need to test various resolution settings
+# samples_res_0_5 <- FindClusters(samples, resolution = 0.5, 
+#                                 cluster.name = "0_5_res_clusters")
+# samples_res_0_6 <- FindClusters(samples, resolution = 0.6, 
+#                                 cluster.name = "0_6_res_clusters")
+# samples_res_0_7 <- FindClusters(samples, resolution = 0.7, 
+#                                 cluster.name = "0_7_res_clusters")
+# samples_res_0_8 <- FindClusters(samples, resolution = 0.8, 
+#                                 cluster.name = "0_8_res_clusters")
+# samples_res_0_9 <- FindClusters(samples, resolution = 0.9, 
+#                                 cluster.name = "0_9_res_clusters")
+# samples_res_1_0 <- FindClusters(samples, resolution = 1.0, 
+#                                 cluster.name = "1_0_res_clusters")
+# samples_res_1_1 <- FindClusters(samples, resolution = 1.1, 
+#                                 cluster.name = "1_1_res_clusters")
+# samples_res_1_2 <- FindClusters(samples, resolution = 1.2, 
+#                                 cluster.name = "1_2_res_clusters")
+
+# #save post-QC rds objects
+# saveRDS(samples_res_0_5, file = "data/rds-objects/260304-0_5_res_clusters.rds")
+# saveRDS(samples_res_0_6, file = "data/rds-objects/260304-0_6_res_clusters.rds")
+# saveRDS(samples_res_0_7, file = "data/rds-objects/260304-0_7_res_clusters.rds")
+# saveRDS(samples_res_0_8, file = "data/rds-objects/260304-0_8_res_clusters.rds")
+# saveRDS(samples_res_0_9, file = "data/rds-objects/260304-0_9_res_clusters.rds")
+# saveRDS(samples_res_1_0, file = "data/rds-objects/260304-1_0_res_clusters.rds")
+# saveRDS(samples_res_1_1, file = "data/rds-objects/260304-1_1_res_clusters.rds")
+# saveRDS(samples_res_1_2, file = "data/rds-objects/260304-1_2_res_clusters.rds")
+# 
+# #load post-QC rds objects
+# samples_res_0_5 <- readRDS(file = "data/rds-objects/260304-0_5_res_clusters.rds")
+# samples_res_0_6 <- readRDS(file = "data/rds-objects/260304-0_6_res_clusters.rds")
+# samples_res_0_7 <- readRDS(file = "data/rds-objects/260304-0_7_res_clusters.rds")
+# samples_res_0_8 <- readRDS(file = "data/rds-objects/260304-0_8_res_clusters.rds")
+# samples_res_0_9 <- readRDS(file = "data/rds-objects/260304-0_9_res_clusters.rds")
+# samples_res_1_0 <- readRDS(file = "data/rds-objects/260304-1_0_res_clusters.rds")
+# samples_res_1_1 <- readRDS(file = "data/rds-objects/260304-1_1_res_clusters.rds")
+# samples_res_1_2 <- readRDS(file = "data/rds-objects/260304-1_2_res_clusters.rds")
+
+
+
+
+samples <- RunUMAP(samples, dims = 1:18)
+
 
 # plot umap before integration
-DimPlot(samples, reduction = "umap.unintegrated")
+DimPlot(samples, reduction = "umap", label = TRUE)
 # group by sample id
-DimPlot(samples, reduction = "umap.unintegrated", group.by = "sample.id")
+DimPlot(samples, reduction = "umap", label = TRUE, group.by = "sample.id")
+DimPlot(samples, reduction = "umap", label = TRUE, group.by = "seurat_clusters")
 # split by sample id
-DimPlot(samples, reduction = "umap.unintegrated", split.by = "sample.id")
+DimPlot(samples, reduction = "umap", label = TRUE, split.by = "sample.id")
+
+
+# save object before annotation
+saveRDS(samples, file = "data/rds-objects/260306-before-annotation.rds")
+samples <- readRDS("data/rds-objects/260306-before-annotation.rds")
+
+# # save object before integration
+# saveRDS(samples, file = "data/rds-objects/250415-before-integration.rds")
+# 
+# # load pre-integration object
+# samples <- readRDS("data/rds-objects/250415-before-integration.rds")
+
 
 # check some features
-FeaturePlot(samples, reduction = "umap.unintegrated", features = "AIRE", split.by = "sample.id")
-FeaturePlot(samples, reduction = "umap.unintegrated", features = "PRSS16", split.by = "sample.id")
-FeaturePlot(samples, reduction = "umap.unintegrated", features = "PSMB11", split.by = "sample.id")
-FeaturePlot(samples, reduction = "umap.unintegrated", features = "LY75", split.by = "sample.id")
-FeaturePlot(samples, reduction = "umap.unintegrated", features = "COL4A6", split.by = "sample.id")
-FeaturePlot(samples, reduction = "umap.unintegrated", features = "ITGA6", split.by = "sample.id")
-FeaturePlot(samples, reduction = "umap.unintegrated", features = "THY1", split.by = "sample.id")
-FeaturePlot(samples, reduction = "umap.unintegrated", features = "BCAM", split.by = "sample.id")
-FeaturePlot(samples, reduction = "umap.unintegrated", features = "CLEC2L", split.by = "sample.id")
+
+VlnPlot(samples, features = c("TBATA","PRSS16"))
+
+label_size <- 4
+order <- TRUE
+
+# cTEC
+FeaturePlot(samples, reduction = "umap", features = "TBATA", label = TRUE, label.size = label_size, order = order)
+FeaturePlot(samples, reduction = "umap", features = "PRSS16", label = TRUE, label.size = label_size, order = order)
+# Transit-amplifying
+FeaturePlot(samples, reduction = "umap", features = "MKI67", label = TRUE, label.size = label_size, order = order)
+FeaturePlot(samples, reduction = "umap", features = "TOP2A", label = TRUE, label.size = label_size, order = order)
+FeaturePlot(samples, reduction = "umap", features = "CDK1", label = TRUE, label.size = label_size, order = order)
+FeaturePlot(samples, reduction = "umap", features = "CENPF", label = TRUE, label.size = label_size, order = order)
+# mTEC I
+FeaturePlot(samples, reduction = "umap", features = "CCL19", label = TRUE, label.size = label_size, order = order)
+FeaturePlot(samples, reduction = "umap", features = "KRT15", label = TRUE, label.size = label_size, order = order)
+FeaturePlot(samples, reduction = "umap", features = "KRT19", label = TRUE, label.size = label_size, order = order)
+FeaturePlot(samples, reduction = "umap", features = "FN1", label = TRUE, label.size = label_size, order = order)
+FeaturePlot(samples, reduction = "umap", features = "CLU", label = TRUE, label.size = label_size, order = order)
+# mTEC II
+FeaturePlot(samples, reduction = "umap", features = "AIRE", label = TRUE, label.size = label_size, order = order)
+# Post-aire
+FeaturePlot(samples, reduction = "umap", features = "SPINK5", label = TRUE, label.size = label_size, order = order)
+# Ionocyte
+FeaturePlot(samples, reduction = "umap", features = "CFTR", label = TRUE, label.size = label_size, order = order)
+FeaturePlot(samples, reduction = "umap", features = "CDH12", label = TRUE, label.size = label_size, order = order)
+# aaTEC
+FeaturePlot(samples, reduction = "umap", features = "VIM", label = TRUE, label.size = label_size, order = order)
+FeaturePlot(samples, reduction = "umap", features = "IGFBP7", label = TRUE, label.size = label_size, order = order)
+FeaturePlot(samples, reduction = "umap", features = "SPARC", label = TRUE, label.size = label_size, order = order)
+FeaturePlot(samples, reduction = "umap", features = "SPARCL1", label = TRUE, label.size = label_size, order = order)
+FeaturePlot(samples, reduction = "umap", features = "COL1A1", label = TRUE, label.size = label_size, order = order)
+# Tuft
+FeaturePlot(samples, reduction = "umap", features = "POU2F3", label = TRUE, label.size = label_size, order = order)
+# Transitioning
+FeaturePlot(samples, reduction = "umap", features = "TESC", label = TRUE, label.size = label_size, order = order)
+FeaturePlot(samples, reduction = "umap", features = "CLDN3", label = TRUE, label.size = label_size, order = order)
+FeaturePlot(samples, reduction = "umap", features = "RGS17", label = TRUE, label.size = label_size, order = order)
+# Neuroendocrine
+FeaturePlot(samples, reduction = "umap", features = "HES6", label = TRUE, label.size = label_size, order = order)
+FeaturePlot(samples, reduction = "umap", features = "NEUROD1", label = TRUE, label.size = label_size, order = order)
+# Neuro
+FeaturePlot(samples, reduction = "umap", features = "ATOH1", label = TRUE, label.size = label_size, order = order)
+FeaturePlot(samples, reduction = "umap", features = "USH2A", label = TRUE, label.size = label_size, order = order)
+# Muscle
+FeaturePlot(samples, reduction = "umap", features = "MYOG", label = TRUE, label.size = label_size, order = order)
+FeaturePlot(samples, reduction = "umap", features = "TTN", label = TRUE, label.size = label_size, order = order)
+FeaturePlot(samples, reduction = "umap", features = "MYH3", label = TRUE, label.size = label_size, order = order)
+# COL4A6-positive TEC
+FeaturePlot(samples, reduction = "umap", features = "COL4A6", label = TRUE, label.size = label_size, order = order)
+FeaturePlot(samples, reduction = "umap", features = "COL4A5", label = TRUE, label.size = label_size, order = order)
+FeaturePlot(samples, reduction = "umap", features = "COL8A1", label = TRUE, label.size = label_size, order = order)
+# CCL21-positive TEC
+FeaturePlot(samples, reduction = "umap", features = "CCL21", label = TRUE, label.size = label_size, order = order)
+# Nurse
+FeaturePlot(samples, reduction = "umap", features = "TBATA", label = TRUE, label.size = label_size, order = order)
+FeaturePlot(samples, reduction = "umap", features = "PRSS16", label = TRUE, label.size = label_size, order = order)
+FeaturePlot(samples, reduction = "umap", features = "CD3E", label = TRUE, label.size = label_size, order = order)
+FeaturePlot(samples, reduction = "umap", features = "PTPRC", label = TRUE, label.size = label_size, order = order)
+# Ciliated
+FeaturePlot(samples, reduction = "umap", features = "FOXJ1", label = TRUE, label.size = label_size, order = order)
+# CFC1-positive cTECs
+FeaturePlot(samples, reduction = "umap", features = "TBATA", label = TRUE, label.size = label_size, order = order)
+FeaturePlot(samples, reduction = "umap", features = "PRSS16", label = TRUE, label.size = label_size, order = order)
+FeaturePlot(samples, reduction = "umap", features = "CFC1", label = TRUE, label.size = label_size, order = order)
+FeaturePlot(samples, reduction = "umap", features = "TP53AIP1", label = TRUE, label.size = label_size, order = order)
+FeaturePlot(samples, reduction = "umap", features = "UBD", label = TRUE, label.size = label_size, order = order)  # need to double check
+
+FeaturePlot(samples, reduction = "umap", features = "TP63", label = TRUE, label.size = label_size, order = order)  # need to double check
+FeaturePlot(samples, reduction = "umap", features = "AIRE", split.by = "sample.id")
+FeaturePlot(samples, reduction = "umap", features = "PRSS16", split.by = "sample.id")
+FeaturePlot(samples, reduction = "umap", features = "PSMB11", split.by = "sample.id")
+FeaturePlot(samples, reduction = "umap", features = "LY75", split.by = "sample.id")
+FeaturePlot(samples, reduction = "umap", features = "COL4A6", split.by = "sample.id")
+FeaturePlot(samples, reduction = "umap", features = "ITGA6", split.by = "sample.id")
+FeaturePlot(samples, reduction = "umap", features = "THY1", split.by = "sample.id")
+FeaturePlot(samples, reduction = "umap", features = "BCAM", split.by = "sample.id")
+FeaturePlot(samples, reduction = "umap", features = "CLEC2L", split.by = "sample.id")
+FeaturePlot(samples, reduction = "umap", features = "CIITA", split.by = "sample.id")
+
+FeaturePlot(samples, 
+            reduction = "umap", 
+            features = "CLEC2L",                 
+            pt.size = 0.6,
+            #colors_use = viridis_inferno_dark_high,
+            label = TRUE, 
+            label.size = 9, 
+            order = TRUE)
 
 
-save_features <- function(feature, seur, reduction = "umap.unintegrated",
-              split.by = "sample.id") {
-  p <- FeaturePlot(seur, reduction = reduction, features = feature,
-              split.by = split.by)
-  ggsave(plot=p, paste0("results/250605/featureplot_", feature, ".pdf"),
-         width=14, height=3)
-}
 
-# batch save featureplots of interest
-foi <- c("AIRE", "PRSS16")
-sapply(foi, save_features,  seur=samples)
+# 260304 annotate cells, FindNeighbors/RunUMAP dims = 18, FindClusters resolution = 0.9
+test <- samples
+new.cluster.ids <- c("cTEC",
+                     "cTEC",
+                     "mTEC I",
+                     "Nurse",
+                     "COL4A6+ TEC",
+                     "COL4A6+ TEC",
+                     "mTEC I",
+                     "mTEC II",
+                     "mTEC I",
+                     "Proliferating mTEC",
+                     "COL4A6+ TEC",
+                     "Neuro",
+                     "Post-Aire",
+                     "Neuroendocrine",
+                     "Nurse",
+                     "Tuft",
+                     "Proliferating cTEC",
+                     "aaTEC",
+                     "mTEC II",
+                     "Muscle",
+                     "Muscle",
+                     "mTEC I",
+                     "cTEC",
+                     "cTEC",
+                     "mTEC I",
+                     "cTEC",
+                     "mTEC I")
+# new.cluster.ids <- c("cTEC",
+#                      "mTEC I",
+#                      "Nurse",
+#                      "COL4A6+ TEC",
+#                      "mTEC II",
+#                      "mTEC I",
+#                      "Neuro",
+#                      "Post-Aire",
+#                      "Neuroendocrine",
+#                      "Tuft",
+#                      "aaTEC",
+#                      "Muscle",
+#                      "cTEC")
 
-#save before integration
-saveRDS(samples, file = "data/rds-objects/250715-before-integration.rds")
-samples <- readRDS("data/rds-objects/250715-before-integration.rds")
+levels(test)
+names(new.cluster.ids) <- levels(test)
+names(new.cluster.ids)
+new.cluster.ids
+#View(new.cluster.ids)
+test <- RenameIdents(test, new.cluster.ids)
+DimPlot(test, reduction = "umap", label = TRUE, pt.size = 0.5) #+ NoLegend()
+test@meta.data$cell_type <- Idents(test)
+FeaturePlot(test, reduction = "umap", features = "AIRE", label = TRUE, label.size = label_size, order = order)  # need to double check
+DimPlot(test, reduction = "umap", label = FALSE, group.by = "cell_type", split.by = "sample.id")
+DimPlot(test, reduction = "umap", label = FALSE, split.by = "sample.id",
+        cols = c("#D8A767","#F47D2B","#D24B27","#3D3D3D","#7E1416","#0570B0",
+                 "#89288F","#3BBCA8","#B45F06","#89C75F","#FEE500","#208A42",
+                 "#f30892")
+)
 
 
-# 250520 test run harmony
-samples_harmony <- RunHarmony(samples, "sample.id",
-                             plot_convergence = TRUE,
-                             nclust = 50,
-                             max_iter = 10,
-                             early_stop = T)
+# save object before annotation
+saveRDS(test, file = "data/rds-objects/260313-after-annotation.rds")
+samples <- readRDS("data/rds-objects/260313-after-annotation.rds")
+DimPlot(samples, reduction = "umap", label = FALSE, split.by = "sample.id",
+        cols = c("#D8A767","#F47D2B","#D24B27","#3D3D3D","#7E1416","#0570B0",
+                 "#89288F","#3BBCA8","#B45F06","#89C75F","#FEE500","#208A42",
+                 "#818f62")
+        )
 
-DimPlot(object = samples_harmony, 
-        reduction = "harmony", 
-        pt.size = .1, 
-        group.by = "sample.id")
-
-samples_harmony <- samples_harmony |>
-  FindNeighbors(reduction = "harmony") |>
-  FindClusters(resolution = 0.5,
-               cluster.name = "harmony.cluster")
-
-samples_harmony <- samples_harmony |>
-  RunUMAP(reduction = "harmony", dims = 1:15)
-
-DimPlot(samples_harmony, reduction = "umap", group.by = "sample.id", pt.size = .1)
-DimPlot(samples_harmony, reduction = "umap", split.by = "sample.id", pt.size = .1)
-DimPlot(samples_harmony, reduction = "umap", label = TRUE,  pt.size = .1)
-
-# plot integrated samples
-FeaturePlot(samples_harmony, reduction = "umap", features = "AIRE", split.by = "sample.id")
-FeaturePlot(samples_harmony, reduction = "umap", features = "PRSS16", split.by = "sample.id")
-FeaturePlot(samples_harmony, reduction = "umap", features = "PSMB11", split.by = "sample.id")
-FeaturePlot(samples_harmony, reduction = "umap", features = "LY75", split.by = "sample.id")
-FeaturePlot(samples_harmony, reduction = "umap", features = "COL4A6", split.by = "sample.id")
-FeaturePlot(samples_harmony, reduction = "umap", features = "MYOG", split.by = "sample.id")
-FeaturePlot(samples_harmony, reduction = "umap", features = "KRT5", split.by = "sample.id")
-FeaturePlot(samples_harmony, reduction = "umap", features = "KRT8", split.by = "sample.id")
-FeaturePlot(samples_harmony, reduction = "umap", features = "KRT14", split.by = "sample.id")
-FeaturePlot(samples_harmony, reduction = "umap", features = "KRT15", split.by = "sample.id")
+FeaturePlot_scCustom(samples, 
+                     reduction = "umap", 
+                     features = "CD200", 
+                     colors_use = viridis_light_high,
+                     label = FALSE, 
+                     label.size = label_size, 
+                     order = order)
 
 
 
-# perform integration by CCAIntegration on the merged samples; 
-# wi = with integration
-sampleswi <- IntegrateLayers(object = samples, method = HarmonyIntegration, 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+cluster1.markers <- FindMarkers(samples, ident.1 = 1, logfc.threshold = 0.25,
+                                test.use = "roc", only.pos = TRUE)
+
+
+# perform integration on the merged samples; wi = with integration
+sampleswi <- IntegrateLayers(object = samples, method = CCAIntegration, 
                            orig.reduction = "pca", 
-                           new.reduction = "harmony",
+                           new.reduction = "integrated.cca",
                            verbose = FALSE)
 # 250415 took 43m 58s
-# 250520 start: 2.08pm to 2:58pm
-# 250715 cca took >30min
-#        harmony took 5min
+
 
 # save object after integrating, before joining layers
-saveRDS(sampleswi, file = "data/rds-objects/250715-after-integration-harmony.rds")
-sampleswi <- readRDS(file = "data/rds-objects/250715-after-integration-harmony.rds")
+saveRDS(sampleswi, file = "data/rds-objects/250415-after-integration.rds")
+sampleswi <- readRDS(file = "data/rds-objects/250415-after-integration.rds")
 
 
 # rejoin the layers after integration
@@ -480,23 +599,23 @@ print(sampleswi[["integrated.cca"]], dims = 1:5, nfeatures = 5)
 VizDimLoadings(sampleswi, dims = 1:2, reduction = "integrated.cca")
 # compare DimPlot from before and after integration
 DimPlot(samples, reduction = "pca") + NoLegend()
-DimPlot(sampleswi, reduction = "harmony") + NoLegend()
+DimPlot(sampleswi, reduction = "integrated.cca") + NoLegend()
 DimHeatmap(sampleswi, dims = 1:15, cells = 6, balanced = TRUE)
-ElbowPlot(sampleswi, reduction = "harmony")
+ElbowPlot(sampleswi, reduction = "integrated.cca")
 
 
 # find clusters post integration and joining
-sampleswi <- FindNeighbors(sampleswi, reduction = "harmony", dims = 1:15)
-sampleswi <- FindClusters(sampleswi, resolution = 0.5)
+sampleswi <- FindNeighbors(sampleswi, reduction = "integrated.cca", dims = 1:18)
+sampleswi <- FindClusters(sampleswi, resolution = 0.9)
 
 # run non-linear dimensional reduction
-sampleswi <- RunUMAP(sampleswi, dims = 1:15, reduction = "harmony")
+sampleswi <- RunUMAP(sampleswi, dims = 1:18, reduction = "integrated.cca")
 
 # plot graphs before combining sample IDs
-DimPlot(sampleswi, reduction = "harmony")
-DimPlot(sampleswi, reduction = "harmony", group.by = "sample.id")
-DimPlot(sampleswi, reduction = "harmony", split.by = "sample.id")
-DimPlot(sampleswi, reduction = "umap.unintegrated", split.by = "sample.id")
+DimPlot(sampleswi, reduction = "umap")
+DimPlot(sampleswi, reduction = "umap", group.by = "sample.id")
+DimPlot(sampleswi, reduction = "umap", split.by = "sample.id")
+DimPlot(samples, reduction = "umap.unintegrated", split.by = "sample.id")
 
 # plot unintegrated samples
 FeaturePlot(samples, reduction = "umap.unintegrated", features = "AIRE", split.by = "sample.id")
@@ -540,10 +659,7 @@ plot1 + plot2
 
 
 
-if (!requireNamespace("remotes", quietly = TRUE)) {
-  install.packages("remotes")
-}
-remotes::install_github("mojaveazure/seurat-disk")
+
 
 
 
