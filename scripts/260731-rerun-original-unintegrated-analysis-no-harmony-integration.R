@@ -5,7 +5,6 @@ library(dplyr)
 library(Seurat)
 library(scCustomize)
 library(ggplot2)
-library(harmony)
 
 DATE_PREFIX <- format(Sys.time(), "%y%m%d-%H%M")
 
@@ -108,38 +107,16 @@ DimPlot(samples, reduction = "pca") + NoLegend()
 DimHeatmap(samples, dims = 1:30, cells = 50, balanced = TRUE)
 ElbowPlot(samples, ndims = 60)
 
-# run harmony (now that "pca" exists to correct)
-samples <- RunHarmony(samples, group.by.vars = "donor", reduction = "pca",
-                      dims.use = 1:18, reduction.save = "harmony")
-
-
-
 # clustering
-samples <- FindNeighbors(samples, reduction = "harmony", dims = 1:18)
+samples <- FindNeighbors(samples, dims = 1:18)
 samples <- FindClusters(samples, resolution = 0.5)
-samples <- RunUMAP(samples, reduction = "harmony", dims = 1:18)
-
-
-# Visualize post-integration
+samples <- RunUMAP(samples, dims = 1:18)
 
 # Cluster count and size distribution
 cat("Clusters found:", length(unique(samples$seurat_clusters)), "\n")
 print(table(samples$seurat_clusters))
 
-# DimPlot colored by cluster
-DimPlot(samples, reduction = "umap", label = TRUE) +
-  labs(title = "Harmony-integrated: clusters")
-
-# DimPlot colored by sample
-DimPlot(samples, reduction = "umap", group.by = "sample.id") +
-  labs(title = "Harmony-integrated: by sample")
-
-# DimPlot colored by donor (the variable actually corrected on)
-DimPlot(samples, reduction = "umap", group.by = "donor") +
-  labs(title = "Harmony-integrated: by donor")
-
-
-# check some features
+# DimPlots
 DimPlot(samples, reduction = "umap", label = TRUE)
 DimPlot(samples, reduction = "umap", label = TRUE, group.by = "sample.id")
 DimPlot(samples, reduction = "umap", label = TRUE, split.by = "sample.id")
