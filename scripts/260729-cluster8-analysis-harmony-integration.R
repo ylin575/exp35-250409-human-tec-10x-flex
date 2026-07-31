@@ -147,7 +147,8 @@ DimPlot(subset(samples, samples@meta.data$seurat_clusters == 6),
         reduction = "umap", label = TRUE)
 DimPlot(subset(samples, samples@meta.data$seurat_clusters == 6), 
         reduction = "umap", label = TRUE, split.by = "sample.id")
-DimPlot_scCustom(samples, cells.highlight = WhichCells(samples, idents = "6"))
+DimPlot_scCustom(samples, cells.highlight = WhichCells(samples, idents = "2"))
+
 
 
 save_features <- function(feature, seur, reduction = "umap", label = TRUE, 
@@ -162,6 +163,7 @@ save_features <- function(feature, seur, reduction = "umap", label = TRUE,
          width=8, height=7)
 }
 
+
 # batch save featureplots of interest
 foi_nurse <- c("TBATA","PRSS16","PSMB11","PTPRC","CD3E")
 foi_ctec <- c("TBATA","PRSS16","PSMB11","LY75")
@@ -174,6 +176,18 @@ foi_all_tec <- "TP63"
 foi_bautista_immature_tec_1 <- c("ACTB","JUNB","FOS")
 foi_bautista_immature_tec_2 <- c("IGFBP5","NNMT","MAOA","DPYS","FKBP5","GLUL")
 foi_bautista_mtec_lo <- c("GABRA5","LYPD1")
+
+save_features <- function(feature, seur, reduction = "umap", label = TRUE, 
+                          label_size = 4, order = TRUE, split.by = NULL) {
+  
+  p <- FeaturePlot_scCustom(seur, reduction = reduction, features = feature,
+                            colors_use = viridis_light_high, label = label, 
+                            label.size = label_size, order = order, 
+                            split.by = split.by)
+  
+  ggsave(plot=p, paste0("results/",DATE_PREFIX,"-featureplot-",obj_name,feature, ".pdf"),
+         width=8, height=7)
+}
 
 sapply(foi_nurse, save_features,  seur=samples)
 sapply(foi_ctec, save_features,  seur=samples)
@@ -227,6 +241,10 @@ krt <- c("KRT1","KRT2","KRT3","KRT4","KRT5","KRT6A","KRT6B","KRT6C","KRT7",
          "KRT31","KRT32","KRT33A","KRT33B","KRT34","KRT35","KRT36","KRT37",
          "KRT38","KRT39","KRT40","KRT71","KRT72","KRT73","KRT74","KRT75",
          "KRT76","KRT77","KRT78","KRT79","KRT80")
+
+
+VlnPlot(samples, features = c("PSMB11", "PTPRC"), idents = c("4","13","14","15","19","21"))
+VlnPlot(samples, features = c("CD4", "CD8A", "CD8B"), idents = c("4", "13", "14", "15"))
 
 
 # save object before annotation
