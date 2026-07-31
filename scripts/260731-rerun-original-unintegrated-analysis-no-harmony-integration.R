@@ -221,11 +221,11 @@ krt <- c("KRT1","KRT2","KRT3","KRT4","KRT5","KRT6A","KRT6B","KRT6C","KRT7",
 
 
 VlnPlot(samples, features = c("PSMB11", "PTPRC"), idents = c("4","13","14","15","19","21"))
-VlnPlot(samples, features = c("CD4", "CD8A", "CD8B"), idents = c("4", "13", "14", "15"))
+VlnPlot(samples, features = c("CD4", "CD8A"), idents = c("4", "13", "14", "15"))
 
 
 # save object before annotation
-saveRDS(samples, file = paste0("data/rds-objects/",DATE_PREFIX,"-post-harmony-before-annotation.rds"))
+saveRDS(samples, file = paste0("data/rds-objects/",DATE_PREFIX,"-before-annotation.rds"))
 
 
 
@@ -263,10 +263,11 @@ top_markers <- all_markers %>%
   slice_max(order_by = avg_log2FC, n = 15) %>%
   ungroup()
 
-write.csv(all_markers, paste0(DATE_PREFIX, "-harmony-donor-all-markers-FULL.csv"),
+write.csv(all_markers, paste0(DATE_PREFIX, "-unintegrated-all-markers-FULL.csv"),
           row.names = FALSE)
-write.csv(top_markers, paste0(DATE_PREFIX, "-harmony-donor-all-markers-TOP15.csv"),
+write.csv(top_markers, paste0(DATE_PREFIX, "-unintegrated-all-markers-TOP15.csv"),
           row.names = FALSE)
+
 
 # Cluster 6 specifically, since that's the population of interest
 cat("\n=== Cluster 6 top 15 markers ===\n")
@@ -353,7 +354,7 @@ DimPlot(test, reduction = "umap", label = FALSE,
 
 
 # save object after annotation
-saveRDS(test, file = "data/rds-objects/260730-post-harmony-integration-annotated.rds")
+saveRDS(test, file = paste0("data/rds-objects/",DATE_PREFIX,"-after-annotation.rds"))
 #tec <- readRDS("data/rds-objects/260501-after-annotation-1.rds")
 
 
