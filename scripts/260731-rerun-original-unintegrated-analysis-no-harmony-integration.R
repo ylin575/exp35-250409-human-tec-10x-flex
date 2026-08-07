@@ -116,6 +116,55 @@ samples <- RunUMAP(samples, dims = 1:18)
 cat("Clusters found:", length(unique(samples$seurat_clusters)), "\n")
 print(table(samples$seurat_clusters))
 
+
+
+
+##############################################
+# Find Markers #
+##############################################
+DATE_PREFIX <- format(Sys.time(), "%y%m%d-%H%M")
+
+Idents(samples) <- "seurat_clusters"
+
+all_markers <- FindAllMarkers(
+  samples,
+  only.pos        = TRUE,
+  min.pct         = 0.25,
+  logfc.threshold = 0.25,
+  verbose         = TRUE
+)
+
+# Sanity check: every cluster represented, no unexpected gaps
+sanity_clusters_found  <- sort(unique(all_markers$cluster))
+sanity_clusters_expect <- sort(unique(samples$seurat_clusters))
+cat("Clusters with markers found:", length(sanity_clusters_found), "\n")
+cat("Clusters expected:", length(sanity_clusters_expect), "\n")
+missing_clusters <- setdiff(sanity_clusters_expect, sanity_clusters_found)
+if (length(missing_clusters) > 0) {
+  cat("WARNING: no markers passed threshold for cluster(s):",
+      paste(missing_clusters, collapse = ", "), "\n")
+} else {
+  cat("PASS: all clusters have at least one marker gene.\n")
+}
+
+# Top 15 per cluster, for a quick scan
+top_markers <- all_markers %>%
+  group_by(cluster) %>%
+  slice_max(order_by = avg_log2FC, n = 15) %>%
+  ungroup()
+
+write.csv(all_markers, paste0(DATE_PREFIX, "-unintegrated-all-markers-FULL.csv"),
+          row.names = FALSE)
+write.csv(top_markers, paste0(DATE_PREFIX, "-unintegrated-all-markers-TOP15.csv"),
+          row.names = FALSE)
+
+
+# Cluster 6 specifically, since that's the population of interest
+cat("\n=== Cluster 7 top 15 markers ===\n")
+print(top_markers %>% filter(cluster == "7") %>%
+        select(gene, avg_log2FC, pct.1, pct.2, p_val_adj))
+
+
 # DimPlots
 DimPlot(samples, reduction = "umap", label = TRUE)
 DimPlot(samples, reduction = "umap", label = TRUE, group.by = "sample.id")
@@ -124,10 +173,11 @@ DimPlot(subset(samples, samples@meta.data$seurat_clusters == 6),
         reduction = "umap", label = TRUE)
 DimPlot(subset(samples, samples@meta.data$seurat_clusters == 6), 
         reduction = "umap", label = TRUE, split.by = "sample.id")
-DimPlot_scCustom(samples, cells.highlight = WhichCells(samples, idents = "2"))
+DimPlot_scCustom(samples, cells.highlight = WhichCells(samples, idents = "7"))
 
 
 
+# batch save featureplots of interest
 save_features <- function(feature, seur, reduction = "umap", label = TRUE, 
                           label_size = 4, order = TRUE, split.by = NULL) {
   
@@ -140,8 +190,6 @@ save_features <- function(feature, seur, reduction = "umap", label = TRUE,
          width=8, height=7)
 }
 
-
-# batch save featureplots of interest
 foi_nurse <- c("TBATA","PRSS16","PSMB11","PTPRC","CD3E")
 foi_ctec <- c("TBATA","PRSS16","PSMB11","LY75")
 foi_bmc_tec <- c("COL4A5","COL4A6","COL8A1","ITGB4")
@@ -162,7 +210,7 @@ save_features <- function(feature, seur, reduction = "umap", label = TRUE,
                             label.size = label_size, order = order, 
                             split.by = split.by)
   
-  ggsave(plot=p, paste0("results/",DATE_PREFIX,"-featureplot-",obj_name,feature, ".pdf"),
+  ggsave(plot=p, paste0("results/",DATE_PREFIX,"-featureplot-",obj_name,"-",feature, ".pdf"),
          width=8, height=7)
 }
 
@@ -225,59 +273,12 @@ VlnPlot(samples, features = c("CD4", "CD8A"), idents = c("4", "13", "14", "15"))
 
 
 # save object before annotation
-saveRDS(samples, file = paste0("data/rds-objects/",DATE_PREFIX,"-before-annotation.rds"))
+saveRDS(samples, file = paste0("data/rds-objects/",DATE_PREFIX,"unitegrated-before-annotation.rds"))
 
 
-
-##############################################
-# Find Markers #
-##############################################
-DATE_PREFIX <- format(Sys.time(), "%y%m%d-%H%M")
-
-Idents(samples) <- "seurat_clusters"
-
-all_markers <- FindAllMarkers(
-  samples,
-  only.pos        = TRUE,
-  min.pct         = 0.25,
-  logfc.threshold = 0.25,
-  verbose         = TRUE
-)
-
-# Sanity check: every cluster represented, no unexpected gaps
-sanity_clusters_found  <- sort(unique(all_markers$cluster))
-sanity_clusters_expect <- sort(unique(samples$seurat_clusters))
-cat("Clusters with markers found:", length(sanity_clusters_found), "\n")
-cat("Clusters expected:", length(sanity_clusters_expect), "\n")
-missing_clusters <- setdiff(sanity_clusters_expect, sanity_clusters_found)
-if (length(missing_clusters) > 0) {
-  cat("WARNING: no markers passed threshold for cluster(s):",
-      paste(missing_clusters, collapse = ", "), "\n")
-} else {
-  cat("PASS: all clusters have at least one marker gene.\n")
-}
-
-# Top 15 per cluster, for a quick scan
-top_markers <- all_markers %>%
-  group_by(cluster) %>%
-  slice_max(order_by = avg_log2FC, n = 15) %>%
-  ungroup()
-
-write.csv(all_markers, paste0(DATE_PREFIX, "-unintegrated-all-markers-FULL.csv"),
-          row.names = FALSE)
-write.csv(top_markers, paste0(DATE_PREFIX, "-unintegrated-all-markers-TOP15.csv"),
-          row.names = FALSE)
-
-
-# Cluster 6 specifically, since that's the population of interest
-cat("\n=== Cluster 6 top 15 markers ===\n")
-print(top_markers %>% filter(cluster == "6") %>%
-        select(gene, avg_log2FC, pct.1, pct.2, p_val_adj))
 
 
 #######################################################
-
-
 # assess the former cluster 8 that was previously spread widely
 
 # cTEC/mTEC-I marker panels (same as used throughout the C1-C6 analysis)
@@ -318,25 +319,29 @@ test <- samples
 new.cluster.ids <- c("cTEC",
                      "mTEC lo",
                      "cTEC",
+                     "Nurse",
                      "BMC TEC",
-                     "Nurse",
-                     "mTEC lo",
-                     "BP TEC",
+                     "BMC TEC",
                      "mTEC hi",
-                     "Mimetic",
+                     "BP TEC",
                      "mTEC lo",
+                     "BMC TEC",
                      "Mimetic",
                      "Mimetic",
                      "Mimetic",
                      "Nurse",
-                     "Nurse",
+                     "Mimetic",
                      "Nurse",
                      "Pericyte",
                      "Mimetic",
                      "Mimetic",
+                     "Mimetic",
+                     "Endothelial",
+                     "cTEC",
                      "Erythroid",
                      "Mimetic",
-                     "Endothelial")
+                     "Erythroid",
+                     "Mimetic")
 levels(test)
 names(new.cluster.ids) <- levels(test)
 names(new.cluster.ids)
@@ -348,8 +353,8 @@ test@meta.data$cell_type <- Idents(test)
 DimPlot(test, reduction = "umap", label = FALSE, group.by = "cell_type", split.by = "sample.id")
 #new colors for cell clusters: palman values
 DimPlot(test, reduction = "umap", label = FALSE,
-        cols = c("#D8A767","#F47D2B","#D24B27","#E7298A","#7E1416","#0570B0",
-                 "#89C75F","#3D3D3D","#208A42","#D51F26")
+        cols = c("#D8A767","#F47D2B","#D24B27","#E7298A","#7E1416",
+                 "#89C75F","#3D3D3D","#208A42","#D51F26","#A8DDB5","#0570B0")
 )
 
 
