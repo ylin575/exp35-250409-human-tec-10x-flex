@@ -98,8 +98,6 @@ stopifnot(!any(is.na(samples$seurat_clusters)))
 
 table(samples$seurat_clusters)
 
-saveRDS(samples, paste0(DATE_PREFIX, "-post-processing-pre-annotation.rds"))
-
 # -----------------------------------------------------------------------------
 # Find markers
 # -----------------------------------------------------------------------------
@@ -117,9 +115,6 @@ top15 <- markers %>%
   ungroup()
 
 write.csv(top15, paste0(DATE_PREFIX, "-markers-TOP15.csv"), row.names = FALSE)
-
-saveRDS(samples, paste0(DATE_PREFIX, "-post-find-markers.rds"))
-#samples <- readRDS(file = "data/rds-objects/260818-2155-post-find-markers.rds")
 
 # -----------------------------------------------------------------------------
 # Annotating cell types
@@ -185,15 +180,8 @@ DimPlot(samples, reduction = "umap",
 saveRDS(samples, paste0(DATE_PREFIX, "-post-annotating.rds"))
 
 
-
-# -----------------------------------------------------------------------------
-# Reload data if paused after previous section
-# -----------------------------------------------------------------------------
-samples <- readRDS(file = "data/rds-objects/260818-2155-post-annotating.rds")
-markers <- read.csv(paste0("results/260807-1222-unintegrated-markers-FULL.csv"))
-top15 <- read.csv("results/260807-1222-unintegrated-markers-TOP15.csv")
+# set seed to 2
 set.seed(2)
-
 
 # -----------------------------------------------------------------------------
 # DimPlot
