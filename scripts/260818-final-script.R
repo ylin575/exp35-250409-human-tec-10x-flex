@@ -68,7 +68,8 @@ samples <- merge(x = ht67_cd205neg_sub,
                  y = list(ht67_cd205pos_sub, ht70_sub, ht71_sub))
 samples <- JoinLayers(samples)
 
-table(samples$sample.id, samples$donor)   # sanity check
+# sanity check: cell # per sample
+table(samples$sample.id, samples$donor)
 
 # -----------------------------------------------------------------------------
 # Standard preprocessing (shared by both branches)
@@ -84,30 +85,30 @@ ElbowPlot(samples, ndims = 60)
 # Find Neighbor, Clusters, UMAP
 # -----------------------------------------------------------------------------
 samples <- FindNeighbors(samples, reduction = "pca", dims = 1:18,
-                         graph.name = c("nn_unintegrated", "snn_unintegrated"))
-samples <- FindClusters(samples, graph.name = "snn_unintegrated",
-                        resolution = 0.5, cluster.name = "clusters_unintegrated")
+                         graph.name = c("nn", "snn"))
+samples <- FindClusters(samples, graph.name = "snn",
+                        resolution = 0.5, cluster.name = "seurat_clusters")
 samples <- RunUMAP(samples, reduction = "pca", dims = 1:18,
-                   reduction.name = "umap_unintegrated")
+                   reduction.name = "umap")
 
 # -----------------------------------------------------------------------------
 # Sanity checks
 # -----------------------------------------------------------------------------
 cat("Reductions present:", paste(Reductions(samples), collapse = ", "), "\n")
-cat("Unintegrated clusters found:", length(unique(samples$clusters_unintegrated)), "\n")
-stopifnot(all(c("umap_unintegrated") %in% Reductions(samples)))
-stopifnot(!any(is.na(samples$clusters_unintegrated)))
+cat("Clusters found:", length(unique(samples$seurat_clusters)), "\n")
+stopifnot(all(c("umap") %in% Reductions(samples)))
+stopifnot(!any(is.na(samples$seurat_clusters)))
 
-table(samples$clusters_unintegrated)
+table(samples$seurat_clusters)
 
-#saveRDS(samples, paste0(DATE_PREFIX, "-samples-both-pre-and-post-integration.rds"))
-#samples <- readRDS(file = "data/rds-objects/260807-1222-samples-both-pre-and-post-integration.rds")
+saveRDS(samples, paste0(DATE_PREFIX, "-post-processing-pre-annotation.rds"))
+#samples <- readRDS(file = "data/rds-objects/260818-2155-post-processing-pre-annotation.rds")
 
 # -----------------------------------------------------------------------------
 # Find markers
 # -----------------------------------------------------------------------------
-Idents(samples) <- "clusters_unintegrated"
-stopifnot(identical(as.character(Idents(samples)), as.character(samples$clusters_unintegrated)))
+Idents(samples) <- "seurat_clusters"
+stopifnot(identical(as.character(Idents(samples)), as.character(samples$seurat_clusters)))
 markers_unint <- FindAllMarkers(samples, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
 
 # Full marker tables
@@ -137,7 +138,7 @@ new.cluster.ids <- c(
   "BMC TEC",                      
   "BMC TEC",                   
   "mTEC hi",                 
-  "Bipolar TEC",                  
+  "Cluster 7",                  
   "mTEC lo",               
   "BMC TEC",                      
   "Mimetic",                      
@@ -175,11 +176,11 @@ cat("\n=== Final annotation counts ===\n")
 print(table(samples$cell_type_unintegrated))
 
 # check annotation on umap
-DimPlot(samples, reduction = "umap_unintegrated",
+DimPlot(samples, reduction = "umap",
         group.by = "cell_type_unintegrated", label = TRUE, repel = TRUE) +
   labs(title = "Unintegrated: annotated cell types")
 
-DimPlot(samples, reduction = "umap_unintegrated", 
+DimPlot(samples, reduction = "umap", 
         group.by = "cell_type_unintegrated",
         label = FALSE,
         cols = c("#D8A767","#F47D2B","#D24B27","#41B6C4","#E7298A",
@@ -191,7 +192,7 @@ saveRDS(samples, paste0(DATE_PREFIX, "-samples-unintegrated-only-post-annotating
 # -----------------------------------------------------------------------------
 # DimPlot
 # -----------------------------------------------------------------------------
-exclude_types_dimplot <- c("Bipolar TEC","Endothelial","Pericyte","Erythroid")
+exclude_types_dimplot <- c("Cluster 7","Endothelial","Pericyte","Erythroid")
 
 samples_dimplot_subset <- subset(
   samples,
@@ -205,7 +206,7 @@ print(table(samples_dimplot_subset$cell_type_unintegrated))
 stopifnot(!any(levels(samples_dimplot_subset$cell_type_unintegrated) %in% exclude_types_dimplot))
 
 p_dimplot_subset <- DimPlot(
-  samples_dimplot_subset, reduction = "umap_unintegrated",
+  samples_dimplot_subset, reduction = "umap",
   group.by = "cell_type_unintegrated", label = FALSE, repel = TRUE,
   cols = c("#D8A767","#208A42","#D24B27","#41B6C4","#E7298A","#0570B0",
            "#89C75F"),
@@ -249,7 +250,7 @@ foi_bautista_mtec_lo <- c("GABRA5","LYPD1")
 foi_other_markers <- c("CD200","ITGA6","BCAM","EPCAM","CD24","LY75","ITGB4",
                        "CD74")
 
-save_features <- function(feature, seur, reduction = "umap_unintegrated",
+save_features <- function(feature, seur, reduction = "umap",
                           label = FALSE, label_size = 4, 
                           order = TRUE, split.by = NULL) {
   
@@ -277,7 +278,7 @@ sapply(foi_other_markers, save_features,  seur=samples)
 
 # -----------------------------------------------------------------------------
 # "Select Markers" heatmap -- unintegrated, 7-category subset
-# (Bipolar TEC, Pericyte, Erythroid excluded
+# (Cluster 7, Pericyte, Erythroid excluded
 # -----------------------------------------------------------------------------
 select_markers_genes <- c(
   "PTPRC", "PDPN",
@@ -296,7 +297,7 @@ if (length(missing_genes) > 0) {
 }
 stopifnot(length(select_markers_genes) > 0)
 
-exclude_types <- c("Bipolar TEC","Endothelial","Pericyte","Erythroid")
+exclude_types <- c("Cluster 7","Endothelial","Pericyte","Erythroid")
 
 samples_select_subset <- subset(
   samples,
@@ -645,7 +646,7 @@ cat("Score range:", round(range(samples$PolyKRT_module_score), 3), "\n")
 # Cell type display order
 # -----------------------------------------------------------------------------
 cluster_order_unint <- c("Nurse", "cTEC", "BMC TEC", "mTEC lo", "mTEC hi",
-                         "Mimetic","Bipolar TEC","Endothelial",
+                         "Mimetic","Cluster 7","Endothelial",
                          "Pericyte","Erythroid")
 
 stopifnot(setequal(cluster_order_unint, levels(samples$cell_type_unintegrated)))
@@ -760,7 +761,7 @@ ggsave(paste0(DATE_PREFIX, "-PolyKRT-module-heatmap-unintegrated-all.pdf"),
 # Ragazzini PolyKRT module score FeaturePlot
 # -----------------------------------------------------------------------------
 p_umap <- FeaturePlot(samples, features = "PolyKRT_module_score",
-                      reduction = "umap_unintegrated", order = TRUE) +
+                      reduction = "umap", order = TRUE) +
   scale_color_viridis_c(option = "viridis") +
   labs(title = "PolyKRT module score, UMAP (unintegrated)")
 print(p_umap)
@@ -877,7 +878,7 @@ cat("  a single population here.\n")
 
 # -----------------------------------------------------------------------------
 # Bautista immature TEC marker heatmap -- unintegrated, subset
-# (Bipolar TEC, Pericyte, Fibroblast, Erythroid excluded)
+# (Cluster 7, Pericyte, Fibroblast, Erythroid excluded)
 # -----------------------------------------------------------------------------
 #exclude_types <- c("Endothelial", "Pericyte", "Erythroid")
 exclude_types <- NA
@@ -898,7 +899,7 @@ stopifnot(!any(levels(samples_vln_subset$cell_type_unintegrated) %in% exclude_ty
 # update cell types in cluster order subset below accordingly based on if
 # any cell types are excluded in the 'exclude_types' object above
 cluster_order_subset <- c("Nurse", "cTEC", "BMC TEC", "mTEC lo", "mTEC hi",
-                          "Mimetic", "Bipolar TEC","Endothelial","Pericyte",
+                          "Mimetic", "Cluster 7","Endothelial","Pericyte",
                           "Erythroid")
 
 stopifnot(setequal(cluster_order_subset,
@@ -974,7 +975,7 @@ cat("Score range:", round(range(samples$bautista_immature_module_score), 3), "\n
 # Bautista immature tec module score FeaturePlot
 # -----------------------------------------------------------------------------
 p_umap <- FeaturePlot(samples, features = "bautista_immature_module_score",
-                      reduction = "umap_unintegrated", order = TRUE) +
+                      reduction = "umap", order = TRUE) +
   scale_color_viridis_c(option = "viridis") +
   labs(title = "bautista immature module score, UMAP (unintegrated)")
 print(p_umap)
@@ -1091,17 +1092,17 @@ write.csv(nurse_markers_top15,
 # -----------------------------------------------------------------------------
 nurse_clusters <- c("3", "13", "15")
 
-samples_nurse_only <- subset(samples, subset = clusters_unintegrated %in% nurse_clusters)
-samples_nurse_only$clusters_unintegrated <- droplevels(samples_nurse_only$clusters_unintegrated)
+samples_nurse_only <- subset(samples, subset = seurat_clusters %in% nurse_clusters)
+samples_nurse_only$seurat_clusters <- droplevels(samples_nurse_only$seurat_clusters)
 
 # Sanity check
 cat("Cells per Nurse cluster:\n")
-print(table(samples_nurse_only$clusters_unintegrated))
-stopifnot(setequal(levels(samples_nurse_only$clusters_unintegrated), nurse_clusters))
+print(table(samples_nurse_only$seurat_clusters))
+stopifnot(setequal(levels(samples_nurse_only$seurat_clusters), nurse_clusters))
 
-Idents(samples_nurse_only) <- "clusters_unintegrated"
+Idents(samples_nurse_only) <- "seurat_clusters"
 stopifnot(identical(as.character(Idents(samples_nurse_only)),
-                    as.character(samples_nurse_only$clusters_unintegrated)))
+                    as.character(samples_nurse_only$seurat_clusters)))
 
 # All directed pairs: (3v13, 13v3), (3v15, 15v3), (13v15, 15v13)
 pairs <- list(
@@ -1120,8 +1121,8 @@ for (p in pairs) {
   cat("NURSE CLUSTER", ident1, "vs. CLUSTER", ident2, "(pairwise, not pooled)\n")
   cat(strrep("=", 60), "\n")
   
-  n1 <- sum(samples_nurse_only$clusters_unintegrated == ident1)
-  n2 <- sum(samples_nurse_only$clusters_unintegrated == ident2)
+  n1 <- sum(samples_nurse_only$seurat_clusters == ident1)
+  n2 <- sum(samples_nurse_only$seurat_clusters == ident2)
   cat("Cell counts:", ident1, "=", n1, "|", ident2, "=", n2, "\n")
   
   m <- tryCatch({
@@ -1161,24 +1162,24 @@ if (length(missing_genes) > 0) {
 }
 stopifnot(length(genes_to_plot) > 0)
 
-samples_nurse_only <- subset(samples, subset = clusters_unintegrated %in% nurse_clusters)
-samples_nurse_only$clusters_unintegrated <- droplevels(samples_nurse_only$clusters_unintegrated)
-samples_nurse_only$clusters_unintegrated <- factor(
-  samples_nurse_only$clusters_unintegrated, levels = nurse_clusters
+samples_nurse_only <- subset(samples, subset = seurat_clusters %in% nurse_clusters)
+samples_nurse_only$seurat_clusters <- droplevels(samples_nurse_only$seurat_clusters)
+samples_nurse_only$seurat_clusters <- factor(
+  samples_nurse_only$seurat_clusters, levels = nurse_clusters
 )
 
 # Sanity check
 cat("Cells per Nurse cluster:\n")
-print(table(samples_nurse_only$clusters_unintegrated))
-stopifnot(setequal(levels(samples_nurse_only$clusters_unintegrated), nurse_clusters))
+print(table(samples_nurse_only$seurat_clusters))
+stopifnot(setequal(levels(samples_nurse_only$seurat_clusters), nurse_clusters))
 
-Idents(samples_nurse_only) <- "clusters_unintegrated"
+Idents(samples_nurse_only) <- "seurat_clusters"
 stopifnot(identical(as.character(Idents(samples_nurse_only)),
-                    as.character(samples_nurse_only$clusters_unintegrated)))
+                    as.character(samples_nurse_only$seurat_clusters)))
 
 downsampled_cells <- WhichCells(samples_nurse_only, downsample = n_points_per_group)
 cat("\nPoints per cluster after downsampling:\n")
-print(table(samples_nurse_only$clusters_unintegrated[downsampled_cells]))
+print(table(samples_nurse_only$seurat_clusters[downsampled_cells]))
 
 # -----------------------------------------------------------------------------
 # Build one panel per gene: violin from all cells, jittered points from
@@ -1186,13 +1187,13 @@ print(table(samples_nurse_only$clusters_unintegrated[downsampled_cells]))
 # -----------------------------------------------------------------------------
 panels <- lapply(genes_to_plot, function(g) {
   p_base <- VlnPlot(samples_nurse_only, features = g,
-                    group.by = "clusters_unintegrated", pt.size = 0) +
+                    group.by = "seurat_clusters", pt.size = 0) +
     NoLegend() +
     labs(x = "Nurse cluster") +
     theme(axis.text.x = element_text(angle = 0, hjust = 0.5, size = 8),
           axis.title.x = element_blank())
   
-  pt_df <- FetchData(samples_nurse_only, vars = c(g, "clusters_unintegrated"),
+  pt_df <- FetchData(samples_nurse_only, vars = c(g, "seurat_clusters"),
                      cells = downsampled_cells)
   colnames(pt_df) <- c("expr", "group")
   
@@ -1227,29 +1228,29 @@ if (length(missing_genes) > 0) {
 }
 stopifnot(length(genes_to_plot) > 0)
 
-samples_nurse_only <- subset(samples, subset = clusters_unintegrated %in% nurse_clusters)
-samples_nurse_only$clusters_unintegrated <- droplevels(samples_nurse_only$clusters_unintegrated)
-samples_nurse_only$clusters_unintegrated <- factor(
-  samples_nurse_only$clusters_unintegrated, levels = nurse_clusters
+samples_nurse_only <- subset(samples, subset = seurat_clusters %in% nurse_clusters)
+samples_nurse_only$seurat_clusters <- droplevels(samples_nurse_only$seurat_clusters)
+samples_nurse_only$seurat_clusters <- factor(
+  samples_nurse_only$seurat_clusters, levels = nurse_clusters
 )
 
 # Sanity check
 cat("Cells per Nurse cluster:\n")
-print(table(samples_nurse_only$clusters_unintegrated))
-stopifnot(setequal(levels(samples_nurse_only$clusters_unintegrated), nurse_clusters))
+print(table(samples_nurse_only$seurat_clusters))
+stopifnot(setequal(levels(samples_nurse_only$seurat_clusters), nurse_clusters))
 
 # -----------------------------------------------------------------------------
 # Full data (all cells) -- drives the violin shapes
 # -----------------------------------------------------------------------------
 expr_data_full <- FetchData(samples_nurse_only,
-                            vars = c(genes_to_plot, "clusters_unintegrated"))
+                            vars = c(genes_to_plot, "seurat_clusters"))
 
 df_long_full <- expr_data_full %>%
   tidyr::pivot_longer(cols = all_of(genes_to_plot),
                       names_to = "gene", values_to = "expression") %>%
   mutate(
     gene = factor(gene, levels = genes_to_plot),
-    clusters_unintegrated = factor(clusters_unintegrated, levels = nurse_clusters)
+    seurat_clusters = factor(seurat_clusters, levels = nurse_clusters)
   )
 
 # Sanity check
@@ -1259,16 +1260,16 @@ stopifnot(!any(is.na(df_long_full$expression)))
 # -----------------------------------------------------------------------------
 # Downsampled cells -- drives the point overlay only
 # -----------------------------------------------------------------------------
-Idents(samples_nurse_only) <- "clusters_unintegrated"
+Idents(samples_nurse_only) <- "seurat_clusters"
 stopifnot(identical(as.character(Idents(samples_nurse_only)),
-                    as.character(samples_nurse_only$clusters_unintegrated)))
+                    as.character(samples_nurse_only$seurat_clusters)))
 
 downsampled_cells <- WhichCells(samples_nurse_only, downsample = n_points_per_group)
 cat("\nPoints per cluster after downsampling:\n")
-print(table(samples_nurse_only$clusters_unintegrated[downsampled_cells]))
+print(table(samples_nurse_only$seurat_clusters[downsampled_cells]))
 
 expr_data_sub <- FetchData(samples_nurse_only,
-                           vars = c(genes_to_plot, "clusters_unintegrated"),
+                           vars = c(genes_to_plot, "seurat_clusters"),
                            cells = downsampled_cells)
 
 df_long_sub <- expr_data_sub %>%
@@ -1276,18 +1277,18 @@ df_long_sub <- expr_data_sub %>%
                       names_to = "gene", values_to = "expression") %>%
   mutate(
     gene = factor(gene, levels = genes_to_plot),
-    clusters_unintegrated = factor(clusters_unintegrated, levels = nurse_clusters)
+    seurat_clusters = factor(seurat_clusters, levels = nurse_clusters)
   )
 
 # -----------------------------------------------------------------------------
 # Plot: violin from full data, jittered points from downsampled subset
 # -----------------------------------------------------------------------------
-p_nurse_genes_by_row <- ggplot(df_long_full, aes(x = gene, y = expression, fill = clusters_unintegrated)) +
+p_nurse_genes_by_row <- ggplot(df_long_full, aes(x = gene, y = expression, fill = seurat_clusters)) +
   geom_violin(scale = "width", trim = TRUE) +
   geom_jitter(data = df_long_sub, aes(x = gene, y = expression),
               width = 0.15, size = 0.4, alpha = 0.5, color = "black",
               inherit.aes = FALSE) +
-  facet_grid(rows = vars(clusters_unintegrated), scales = "free_y") +
+  facet_grid(rows = vars(seurat_clusters), scales = "free_y") +
   labs(title = "Nurse clusters 3/13/15: select gene expression",
        x = "Gene", y = "Expression level") +
   theme_minimal(base_size = 10) +
@@ -1305,8 +1306,8 @@ ggsave(paste0(DATE_PREFIX, "-nurse-3-13-15-genes-by-row-violin-sparse-points.pdf
 # Cell cycle phase per Nurse subcluster
 # -----------------------------------------------------------------------------
 nurse_cellcycle <- samples@meta.data %>%
-  filter(clusters_unintegrated %in% nurse_clusters) %>%
-  group_by(clusters_unintegrated, Phase) %>%
+  filter(seurat_clusters %in% nurse_clusters) %>%
+  group_by(seurat_clusters, Phase) %>%
   summarise(n = n(), .groups = "drop") %>%
   tidyr::pivot_wider(names_from = Phase, values_from = n, values_fill = 0) %>%
   mutate(
@@ -1322,7 +1323,7 @@ write.csv(nurse_cellcycle,
           row.names = FALSE)
 
 # Sanity check
-stopifnot(sum(nurse_cellcycle$total) == sum(samples$clusters_unintegrated %in% nurse_clusters))
+stopifnot(sum(nurse_cellcycle$total) == sum(samples$seurat_clusters %in% nurse_clusters))
 
 # -----------------------------------------------------------------------------
 # VlnPlot: other markers, Nurse clusters only (3, 13, 15),
@@ -1339,7 +1340,7 @@ select_markers_genes <- c(
 )
 
 nurse_clusters <- c("3", "13", "15")
-group_col <- "clusters_unintegrated"
+group_col <- "seurat_clusters"
 n_points_per_group <- 1500   # dot-subsampling cap, same as before -- adjust as needed
 
 missing_genes <- setdiff(select_markers_genes, rownames(samples))
@@ -1349,16 +1350,16 @@ if (length(missing_genes) > 0) {
 }
 stopifnot(length(select_markers_genes) > 0)
 
-samples_nurse_only <- subset(samples, subset = clusters_unintegrated %in% nurse_clusters)
-samples_nurse_only$clusters_unintegrated <- droplevels(samples_nurse_only$clusters_unintegrated)
-samples_nurse_only$clusters_unintegrated <- factor(
-  samples_nurse_only$clusters_unintegrated, levels = nurse_clusters
+samples_nurse_only <- subset(samples, subset = seurat_clusters %in% nurse_clusters)
+samples_nurse_only$seurat_clusters <- droplevels(samples_nurse_only$seurat_clusters)
+samples_nurse_only$seurat_clusters <- factor(
+  samples_nurse_only$seurat_clusters, levels = nurse_clusters
 )
 
 # Sanity check
 cat("Cells per Nurse cluster:\n")
-print(table(samples_nurse_only$clusters_unintegrated))
-stopifnot(setequal(levels(samples_nurse_only$clusters_unintegrated), nurse_clusters))
+print(table(samples_nurse_only$seurat_clusters))
+stopifnot(setequal(levels(samples_nurse_only$seurat_clusters), nurse_clusters))
 
 Idents(samples_nurse_only) <- group_col
 stopifnot(identical(as.character(Idents(samples_nurse_only)),
@@ -1410,7 +1411,7 @@ dev.off()
 cat("\nSaved:", normalizePath(pdf_path), "\n")
 
 # =============================================================================
-# Cluster 15 standalone re-embedding -- same method as Bipolar TEC and Nurse
+# Cluster 15 standalone re-embedding -- same method as Cluster 7 and Nurse
 # subclustering: subset, wipe stale reductions, fresh PCA/UMAP/clustering on
 # just these cells.
 # =============================================================================
@@ -1418,7 +1419,7 @@ cat("\nSaved:", normalizePath(pdf_path), "\n")
 # -----------------------------------------------------------------------------
 # Step 1: Subset to cluster 15 cells only
 # -----------------------------------------------------------------------------
-cluster15_standalone <- subset(samples, subset = clusters_unintegrated == "15")
+cluster15_standalone <- subset(samples, subset = seurat_clusters == "15")
 
 cat("Cluster 15 standalone cell count:", ncol(cluster15_standalone), "\n")
 
@@ -1818,13 +1819,13 @@ write.csv(markers_6v5, paste0(DATE_PREFIX, "-cluster15-sub6-vs-sub5.csv"), row.n
 # Cluster 7 (red) highlighted on the whole-dataset UMAP
 # -----------------------------------------------------------------------------
 p_panelA <- DimPlot(
-  samples, reduction = "umap_unintegrated",
-  cells.highlight = WhichCells(samples, expression = clusters_unintegrated == "7"),
+  samples, reduction = "umap",
+  cells.highlight = WhichCells(samples, expression = seurat_clusters == "7"),
   sizes.highlight = 0.6, pt.size = 0.3,
   split.by = "sample.id"
 ) +
-  scale_color_manual(values = c("grey85", "red"), labels = c("Other", "Bipolar TEC")) +
-  labs(title = "Bipolar TEC (cluster 7) on whole-dataset UMAP") +
+  scale_color_manual(values = c("grey85", "red"), labels = c("Other", "Cluster 7")) +
+  labs(title = "Cluster 7 (cluster 7) on whole-dataset UMAP") +
   theme_void(base_size = 10) +
   theme(plot.title = element_text(size = 11, face = "bold", hjust = 0.5),
         legend.position = "right")
@@ -1834,7 +1835,7 @@ ggsave(paste0(DATE_PREFIX, "-Fig-BipolarTEC-panelA-umap-highlight-split-by-sampl
        p_panelA, width = 8, height = 4)
 
 # sanity check: confirm highlighted cell count matches cluster 7's known size
-stopifnot(length(WhichCells(samples, expression = clusters_unintegrated == "7")) == 1264)
+stopifnot(length(WhichCells(samples, expression = seurat_clusters == "7")) == 1264)
 
 # -----------------------------------------------------------------------------
 # QC Test #2: nFeature, nCount, percent.mt -- cluster 7 (whole) vs. whole
@@ -1842,13 +1843,13 @@ stopifnot(length(WhichCells(samples, expression = clusters_unintegrated == "7"))
 # signature typical of doublet-enriched clusters.
 # (self-contained -- re-derives everything from scratch)
 # -----------------------------------------------------------------------------
-samples$c7_vs_whole <- ifelse(samples$clusters_unintegrated == "7",
-                              "Cluster 7 (Bipolar TEC)", "Whole dataset")
+samples$c7_vs_whole <- ifelse(samples$seurat_clusters == "7",
+                              "Cluster 7 (Cluster 7)", "Whole dataset")
 samples$c7_vs_whole <- factor(samples$c7_vs_whole,
-                              levels = c("Cluster 7 (Bipolar TEC)", "Whole dataset"))
+                              levels = c("Cluster 7 (Cluster 7)", "Whole dataset"))
 
 # sanity check: confirm group sizes match cluster 7's known size and total dataset
-stopifnot(sum(samples$c7_vs_whole == "Cluster 7 (Bipolar TEC)") == 1264)
+stopifnot(sum(samples$c7_vs_whole == "Cluster 7 (Cluster 7)") == 1264)
 stopifnot(sum(table(samples$c7_vs_whole)) == ncol(samples))
 
 cat("Group sizes:\n")
@@ -1910,7 +1911,7 @@ ggsave(paste0(DATE_PREFIX, "-c7-vs-whole-QC-metrics-violin.pdf"),
 # -----------------------------------------------------------------------------
 cat("\n=== Wilcoxon: cluster 7 vs. rest of dataset ===\n")
 for (feat in qc_features) {
-  in_c7 <- samples[[feat]][samples$c7_vs_whole == "Cluster 7 (Bipolar TEC)", 1]
+  in_c7 <- samples[[feat]][samples$c7_vs_whole == "Cluster 7 (Cluster 7)", 1]
   out_c7 <- samples[[feat]][samples$c7_vs_whole == "Whole dataset", 1]
   test <- wilcox.test(in_c7, out_c7)
   cat(sprintf("%s: cluster7 median=%.2f vs rest median=%.2f, p=%.2e\n",
@@ -1925,7 +1926,7 @@ for (feat in qc_features) {
 # side-by-side violin, cluster 7 vs. All, with subsampled point
 # overlay (violin density from ALL cells, points downsampled per group)
 # -----------------------------------------------------------------------------
-samples$c7_vs_all <- ifelse(samples$clusters_unintegrated == "7",
+samples$c7_vs_all <- ifelse(samples$seurat_clusters == "7",
                               "Cluster 7", "All")
 samples$c7_vs_all <- factor(samples$c7_vs_all,
                               levels = c("Cluster 7", "All"))
@@ -1969,7 +1970,7 @@ ggsave(paste0(DATE_PREFIX, "-c7-vs-whole-QC-metrics-violin-sparse-points.pdf"),
 # Cluster 7 QC Test: nFeature vs nCount scatter highlighted on top of 
 # the all-dataset distribution
 # -----------------------------------------------------------------------------
-cells_c7 <- colnames(samples)[samples$clusters_unintegrated == "7"]
+cells_c7 <- colnames(samples)[samples$seurat_clusters == "7"]
 
 # sanity check: confirm highlighted cell count matches cluster 7's known size
 stopifnot(length(cells_c7) == 1264)
@@ -2001,7 +2002,7 @@ ggsave(paste0(DATE_PREFIX, "-c7-nFeature-vs-nCount-scatter.pdf"),
        p_qc_c7_scatter, width = 8, height = 7)
 
 # -----------------------------------------------------------------------------
-# QC Test #1: Doublet detection (scDblFinder) -- cluster 7 (Bipolar TEC)
+# QC Test #1: Doublet detection (scDblFinder) -- cluster 7 (Cluster 7)
 # vs. rest of dataset, and double-positive vs. non-double-positive within
 # cluster 7. Checks whether cluster 7 (or its double-positive subset
 # specifically) is enriched for doublet calls.
@@ -2026,8 +2027,8 @@ samples$scDblFinder.score <- sce_full$scDblFinder.score
 # -----------------------------------------------------------------------------
 # Doublet rate: cluster 7 vs. whole dataset
 # -----------------------------------------------------------------------------
-samples$c7_vs_whole <- ifelse(samples$clusters_unintegrated == "7",
-                              "Cluster 7 (Bipolar TEC)", "Whole dataset")
+samples$c7_vs_whole <- ifelse(samples$seurat_clusters == "7",
+                              "Cluster 7 (Cluster 7)", "Whole dataset")
 
 cat("=== Doublet classification: cluster 7 vs. whole dataset ===\n")
 dbl_c7_vs_whole <- table(samples$c7_vs_whole, samples$scDblFinder.class)
@@ -2044,7 +2045,7 @@ ctec_panel_dp    <- c("LY75", "PSMB11", "PRSS16")
 mtec_lo_panel_dp <- c("SLC34A2")
 stopifnot(all(c(ctec_panel_dp, mtec_lo_panel_dp) %in% rownames(samples)))
 
-c7_cells <- subset(samples, subset = clusters_unintegrated == "7")
+c7_cells <- subset(samples, subset = seurat_clusters == "7")
 stopifnot(ncol(c7_cells) == 1264)
 
 dp_status <- FetchData(c7_cells, vars = c(ctec_panel_dp, mtec_lo_panel_dp)) %>%
@@ -2073,8 +2074,8 @@ stopifnot(sum(dbl_c7_dp) == ncol(c7_cells))
 stopifnot("scDblFinder.class" %in% colnames(samples@meta.data))
 
 samples$c7_doublet_status <- case_when(
-  samples$clusters_unintegrated == "7" & samples$scDblFinder.class == "doublet" ~ "Cluster 7 - doublet",
-  samples$clusters_unintegrated == "7" & samples$scDblFinder.class == "singlet" ~ "Cluster 7 - singlet",
+  samples$seurat_clusters == "7" & samples$scDblFinder.class == "doublet" ~ "Cluster 7 - doublet",
+  samples$seurat_clusters == "7" & samples$scDblFinder.class == "singlet" ~ "Cluster 7 - singlet",
   TRUE ~ "Other clusters"
 )
 
@@ -2085,7 +2086,7 @@ stopifnot(sum(table(samples$c7_doublet_status)) == ncol(samples))
 stopifnot(sum(samples$c7_doublet_status %in% c("Cluster 7 - doublet", "Cluster 7 - singlet")) == 1264)
 
 p_c7_doublet_umap <- DimPlot(
-  samples, reduction = "umap_unintegrated", group.by = "c7_doublet_status",
+  samples, reduction = "umap", group.by = "c7_doublet_status",
   split.by = "c7_doublet_status",
   cols = c("Other clusters" = "grey85", "Cluster 7 - singlet" = "blue", "Cluster 7 - doublet" = "red"),
   order = c("Cluster 7 - doublet", "Cluster 7 - singlet", "Other clusters"),
@@ -2113,7 +2114,7 @@ ctec_panel_dp    <- c("LY75", "PSMB11", "PRSS16")
 mtec_lo_panel_dp <- c("SLC34A2")
 stopifnot(all(c(ctec_panel_dp, mtec_lo_panel_dp) %in% rownames(samples)))
 
-c7_cells <- subset(samples, subset = clusters_unintegrated == "7")
+c7_cells <- subset(samples, subset = seurat_clusters == "7")
 
 # sanity check: confirm cluster 7 cell count matches established value
 stopifnot(ncol(c7_cells) == 1264)
@@ -2194,7 +2195,7 @@ mTEC_I_markers <- c("KRT14", "CCL19")
 
 stopifnot(all(c(cTEC_markers, mTEC_I_markers) %in% rownames(samples)))
 
-c7_cells <- subset(samples, subset = clusters_unintegrated == "7")
+c7_cells <- subset(samples, subset = seurat_clusters == "7")
 stopifnot(ncol(c7_cells) == 1264)
 
 # -----------------------------------------------------------------------------
@@ -2273,8 +2274,8 @@ samples$scDblFinder.class <- sce_full$scDblFinder.class
 samples$scDblFinder.score <- sce_full$scDblFinder.score
 
 # -- Doublet rate: cluster 7 vs. whole dataset --
-samples$c7_vs_whole <- ifelse(samples$clusters_unintegrated == "7",
-                              "Cluster 7 (Bipolar TEC)", "Whole dataset")
+samples$c7_vs_whole <- ifelse(samples$seurat_clusters == "7",
+                              "Cluster 7 (Cluster 7)", "Whole dataset")
 
 cat("=== Doublet classification: cluster 7 vs. whole dataset ===\n")
 dbl_c7_vs_whole <- table(samples$c7_vs_whole, samples$scDblFinder.class)
@@ -2293,7 +2294,7 @@ cTEC_markers   <- c("PSMB11", "PRSS16", "LY75")
 mTEC_I_markers <- c("KRT14", "CCL19")
 stopifnot(all(c(cTEC_markers, mTEC_I_markers) %in% rownames(samples)))
 
-c7_cells <- subset(samples, subset = clusters_unintegrated == "7")
+c7_cells <- subset(samples, subset = seurat_clusters == "7")
 stopifnot(ncol(c7_cells) == 1264)
 
 dp_status <- FetchData(c7_cells, vars = c(cTEC_markers, mTEC_I_markers)) %>%
@@ -2334,7 +2335,7 @@ cTEC_markers   <- c("PSMB11", "PRSS16", "LY75")
 mTEC_I_markers <- c("KRT14", "CCL19")
 stopifnot(all(c(cTEC_markers, mTEC_I_markers) %in% rownames(samples)))
 
-c7_cells <- subset(samples, subset = clusters_unintegrated == "7")
+c7_cells <- subset(samples, subset = seurat_clusters == "7")
 stopifnot(ncol(c7_cells) == 1264)
 
 dp_status <- FetchData(c7_cells, vars = c(cTEC_markers, mTEC_I_markers)) %>%
@@ -2402,8 +2403,8 @@ ggsave(paste0(DATE_PREFIX, "-c7-doublepos-QC-metrics-violin-CORRECTEDpanel.pdf")
 # split by singlet/doublet status
 # -----------------------------------------------------------------------------
 samples$c7_doublet_status <- case_when(
-  samples$clusters_unintegrated == "7" & samples$scDblFinder.class == "doublet" ~ "Cluster 7 - doublet",
-  samples$clusters_unintegrated == "7" & samples$scDblFinder.class == "singlet" ~ "Cluster 7 - singlet",
+  samples$seurat_clusters == "7" & samples$scDblFinder.class == "doublet" ~ "Cluster 7 - doublet",
+  samples$seurat_clusters == "7" & samples$scDblFinder.class == "singlet" ~ "Cluster 7 - singlet",
   TRUE ~ "Other clusters"
 )
 
@@ -2412,7 +2413,7 @@ print(group_sizes)
 write.csv(as.data.frame(group_sizes), paste0(DATE_PREFIX, "-c7-doublet-status-groupsizes-CORRECTEDpanel.csv"), row.names = FALSE)
 
 p_c7_doublet_umap <- DimPlot(
-  samples, reduction = "umap_unintegrated", group.by = "c7_doublet_status",
+  samples, reduction = "umap", group.by = "c7_doublet_status",
   split.by = "c7_doublet_status",
   cols = c("Other clusters" = "grey85", "Cluster 7 - singlet" = "blue", "Cluster 7 - doublet" = "red"),
   order = c("Cluster 7 - doublet", "Cluster 7 - singlet", "Other clusters"),
@@ -2444,7 +2445,7 @@ cTEC_markers   <- c("PSMB11", "PRSS16", "LY75")
 mTEC_I_markers <- c("KRT14", "CCL19")
 stopifnot(all(c(cTEC_markers, mTEC_I_markers) %in% rownames(samples)))
 
-c7_cells <- subset(samples, subset = clusters_unintegrated == "7")
+c7_cells <- subset(samples, subset = seurat_clusters == "7")
 stopifnot(ncol(c7_cells) == 1264)
 
 dp_status <- FetchData(c7_cells, vars = c(cTEC_markers, mTEC_I_markers)) %>%
@@ -2519,7 +2520,7 @@ write.csv(cycling_summary, paste0(DATE_PREFIX, "-c7-test4-pctcycling-summary.csv
 
 # -----------------------------------------------------------------------------
 # Heatmap -- cluster 7's top 15 FindMarkers genes (vs. all other
-# clusters), shown across all annotated cell types including Bipolar TEC
+# clusters), shown across all annotated cell types including Cluster 7
 # -----------------------------------------------------------------------------
 bipolar_top15_genes <- top15_unint %>%
   filter(cluster == "7") %>%
@@ -2528,11 +2529,11 @@ bipolar_top15_genes <- top15_unint %>%
 
 # sanity check: confirm exactly 15 genes retrieved for cluster 7
 stopifnot(length(bipolar_top15_genes) == 15)
-cat("Bipolar TEC top 15 genes:\n")
+cat("Cluster 7 top 15 genes:\n")
 cat(paste(bipolar_top15_genes, collapse = ", "), "\n")
 
 cluster_order_panelB <- c("Nurse", "cTEC", "BMC TEC", "mTEC lo", "mTEC hi",
-                          "Mimetic", "Endothelial", "Bipolar TEC", "Pericyte",
+                          "Mimetic", "Endothelial", "Cluster 7", "Pericyte",
                           "Erythroid")
 
 # sanity check: confirm cluster_order_panelB matches current object's cell type levels
@@ -2570,7 +2571,7 @@ p_panelB <- ggplot(df_panelB, aes(x = cluster, y = gene, fill = z)) +
     low = "#F7E27A", mid = "grey95", high = "#1B3B6F",
     midpoint = 0, name = "Relative\nexpr. (z)"
   ) +
-  labs(title = "Bipolar TEC top 15 markers (vs. all other clusters)") +
+  labs(title = "Cluster 7 top 15 markers (vs. all other clusters)") +
   theme_minimal(base_size = 10) +
   theme(
     axis.title  = element_blank(),
@@ -2584,7 +2585,7 @@ ggsave(paste0(DATE_PREFIX, "-Fig-BipolarTEC-panelB-top15-heatmap.pdf"),
        p_panelB, width = 7, height = 6)
 
 # -----------------------------------------------------------------------------
-# Heatmap: top 15 markers defining Bipolar TEC
+# Heatmap: top 15 markers defining Cluster 7
 # -----------------------------------------------------------------------------
 bipolar_genes <- top15_unint %>%
   filter(cluster == "7") %>%
@@ -2592,10 +2593,10 @@ bipolar_genes <- top15_unint %>%
   pull(gene)
 
 stopifnot(length(bipolar_genes) == 15)
-cat("Bipolar TEC top 15 genes:\n")
+cat("Cluster 7 top 15 genes:\n")
 cat(paste(bipolar_genes, collapse = ", "), "\n")
 
-#exclude_types <- c("Endothelial", "Pericyte", "Erythroid")   # Bipolar TEC retained
+#exclude_types <- c("Endothelial", "Pericyte", "Erythroid")   # Cluster 7 retained
 exclude_types <- NA
 
 samples_bipolar_subset <- subset(
@@ -2609,7 +2610,7 @@ print(table(samples_bipolar_subset$cell_type_unintegrated))
 stopifnot(!any(levels(samples_bipolar_subset$cell_type_unintegrated) %in% exclude_types))
 
 cluster_order_bipolar <- c("Nurse", "cTEC", "BMC TEC", "mTEC lo", "mTEC hi",
-                           "Mimetic","Endothelial", "Bipolar TEC", "Pericyte",
+                           "Mimetic","Endothelial", "Cluster 7", "Pericyte",
                            "Erythroid")
 
 stopifnot(setequal(cluster_order_bipolar,
@@ -2657,16 +2658,16 @@ ggsave(paste0(DATE_PREFIX, "-bipolar-TEC-marker-heatmap-unintegrated.pdf"),
        p_bipolar_heatmap, width = 7, height = 6)
 
 # -----------------------------------------------------------------------------
-# Bipolar TEC subcluster analysis -- visualize in isolation
+# Cluster 7 subcluster analysis -- visualize in isolation
 # -----------------------------------------------------------------------------
-bipolar_cells <- subset(samples, subset = clusters_unintegrated == "7")
+bipolar_cells <- subset(samples, subset = seurat_clusters == "7")
 
-cat("Bipolar TEC total cells:", ncol(bipolar_cells), "\n")
+cat("Cluster 7 total cells:", ncol(bipolar_cells), "\n")
 
-p_bipolar_alone <- DimPlot(bipolar_cells, reduction = "umap_unintegrated",
-                           group.by = "clusters_unintegrated") +
+p_bipolar_alone <- DimPlot(bipolar_cells, reduction = "umap",
+                           group.by = "seurat_clusters") +
   NoLegend() +
-  labs(title = "Bipolar TEC only (cluster 7, unintegrated)")
+  labs(title = "Cluster 7 only (cluster 7, unintegrated)")
 print(p_bipolar_alone)
 ggsave(paste0(DATE_PREFIX, "-bipolar-TEC-alone-umap.pdf"), p_bipolar_alone,
        width = 6, height = 5)
@@ -2674,22 +2675,22 @@ ggsave(paste0(DATE_PREFIX, "-bipolar-TEC-alone-umap.pdf"), p_bipolar_alone,
 # Also on the full UMAP, highlighted against everything else -- useful for
 # seeing exactly which neighbors it's spatially adjacent to
 p_bipolar_highlight <- DimPlot(
-  samples, reduction = "umap_unintegrated",
-  cells.highlight = WhichCells(samples, expression = clusters_unintegrated == "7")
+  samples, reduction = "umap",
+  cells.highlight = WhichCells(samples, expression = seurat_clusters == "7")
 ) +
-  labs(title = "Bipolar TEC highlighted on full UMAP") +
-  scale_color_manual(values = c("grey80", "red"), labels = c("Other", "Bipolar TEC"))
+  labs(title = "Cluster 7 highlighted on full UMAP") +
+  scale_color_manual(values = c("grey80", "red"), labels = c("Other", "Cluster 7"))
 print(p_bipolar_highlight)
 ggsave(paste0(DATE_PREFIX, "-bipolar-TEC-highlighted-full-umap.pdf"),
        p_bipolar_highlight, width = 8, height = 7)
 
 
-c7_coords <- Embeddings(samples, "umap_unintegrated") %>%
+c7_coords <- Embeddings(samples, "umap") %>%
   as.data.frame() %>%
   tibble::rownames_to_column("cell") %>%
   rename(umap_1 = 2, umap_2 = 3)
-c7_coords$clusters_unintegrated <- as.character(samples$clusters_unintegrated[c7_coords$cell])
-c7_coords <- c7_coords %>% filter(clusters_unintegrated == "7")
+c7_coords$seurat_clusters <- as.character(samples$seurat_clusters[c7_coords$cell])
+c7_coords <- c7_coords %>% filter(seurat_clusters == "7")
 
 c7_coords <- c7_coords %>%
   mutate(sub_region = case_when(
@@ -2700,7 +2701,7 @@ c7_coords <- c7_coords %>%
     TRUE ~ "unassigned"
   ))
 
-cat("=== Bipolar TEC sub-region cell counts ===\n")
+cat("=== Cluster 7 sub-region cell counts ===\n")
 print(table(c7_coords$sub_region))
 stopifnot(sum(table(c7_coords$sub_region)) == nrow(c7_coords))
 
@@ -2712,18 +2713,18 @@ samples$c7_subregion[match(c7_coords$cell, colnames(samples))] <- c7_coords$sub_
 # Sanity check
 stopifnot(sum(!is.na(samples$c7_subregion)) == nrow(c7_coords))
 
-# Plot: Bipolar TEC only, colored by sub-region assignment
-bipolar_cells <- subset(samples, subset = clusters_unintegrated == "7")
+# Plot: Cluster 7 only, colored by sub-region assignment
+bipolar_cells <- subset(samples, subset = seurat_clusters == "7")
 
-p_c7_gating <- DimPlot(bipolar_cells, reduction = "umap_unintegrated",
+p_c7_gating <- DimPlot(bipolar_cells, reduction = "umap",
                        group.by = "c7_subregion", label = TRUE, repel = TRUE) +
-  labs(title = "Bipolar TEC gated into 4 sub-regions (unintegrated)")
+  labs(title = "Cluster 7 gated into 4 sub-regions (unintegrated)")
 print(p_c7_gating)
 ggsave(paste0(DATE_PREFIX, "-bipolar-TEC-subregion-gating.pdf"), p_c7_gating,
        width = 7, height = 6)
 
 # -----------------------------------------------------------------------------
-# Bipolar TEC sub-region marker analysis: one-vs-all + one-vs-specific-neighbor
+# Cluster 7 sub-region marker analysis: one-vs-all + one-vs-specific-neighbor
 # -----------------------------------------------------------------------------
 neighbor_map <- list(
   near_cTEC    = c("0", "2"),
@@ -2735,11 +2736,11 @@ neighbor_map <- list(
 # Sanity check: confirm every listed neighbor cluster exists and has cells
 for (region in names(neighbor_map)) {
   ids <- neighbor_map[[region]]
-  missing_ids <- setdiff(ids, unique(as.character(samples$clusters_unintegrated)))
+  missing_ids <- setdiff(ids, unique(as.character(samples$seurat_clusters)))
   if (length(missing_ids) > 0) {
     stop(region, ": cluster ID(s) not found: ", paste(missing_ids, collapse = ", "))
   }
-  n_neighbor_cells <- sum(samples$clusters_unintegrated %in% ids)
+  n_neighbor_cells <- sum(samples$seurat_clusters %in% ids)
   cat(sprintf("%-14s neighbor clusters %-10s -> %d cells\n",
               region, paste(ids, collapse = ","), n_neighbor_cells))
 }
@@ -2748,7 +2749,7 @@ for (region in names(neighbor_map)) {
 samples$ident_for_c7_analysis <- ifelse(
   !is.na(samples$c7_subregion) & samples$c7_subregion != "unassigned",
   samples$c7_subregion,
-  as.character(samples$clusters_unintegrated)
+  as.character(samples$seurat_clusters)
 )
 Idents(samples) <- "ident_for_c7_analysis"
 stopifnot(identical(as.character(Idents(samples)), as.character(samples$ident_for_c7_analysis)))
@@ -2798,23 +2799,23 @@ for (region in names(neighbor_map)) {
 # Sanity check: confirm c7 sub-region analysis used unintegrated cluster IDs
 # only, not harmony cluster IDs, at every step (gating, neighbor_map, Idents)
 # -----------------------------------------------------------------------------
-# 1. Bipolar TEC cluster 7 was gated from clusters_unintegrated, not clusters_harmony
-stopifnot(all(samples$clusters_unintegrated[!is.na(samples$c7_subregion)] == "7"))
-cat("c7_subregion cells are ALL clusters_unintegrated == 7: TRUE\n")
+# 1. Cluster 7 cluster 7 was gated from seurat_clusters, not clusters_harmony
+stopifnot(all(samples$seurat_clusters[!is.na(samples$c7_subregion)] == "7"))
+cat("c7_subregion cells are ALL seurat_clusters == 7: TRUE\n")
 
-# 2. neighbor_map cluster IDs must exist in clusters_unintegrated, and be
+# 2. neighbor_map cluster IDs must exist in seurat_clusters, and be
 #    checked against clusters_harmony to confirm they're not silently valid
 #    there too by coincidence (which would mask a branch mix-up)
 for (region in names(neighbor_map)) {
   ids <- neighbor_map[[region]]
-  in_unint   <- all(ids %in% levels(samples$clusters_unintegrated))
+  in_unint   <- all(ids %in% levels(samples$seurat_clusters))
   cat(sprintf("%-14s ids=%-10s in unintegrated levels: %s\n",
               region, paste(ids, collapse=","), in_unint))
 }
-stopifnot(all(sapply(neighbor_map, function(ids) all(ids %in% levels(samples$clusters_unintegrated)))))
+stopifnot(all(sapply(neighbor_map, function(ids) all(ids %in% levels(samples$seurat_clusters)))))
 
 # -----------------------------------------------------------------------------
-# Bipolar TEC sub-region analysis, Approach B: internal distinctiveness,
+# Cluster 7 sub-region analysis, Approach B: internal distinctiveness,
 # then cross-reference against actual neighbor cluster markers
 # -----------------------------------------------------------------------------
 
@@ -2886,7 +2887,7 @@ for (region in subregions) {
 }
 
 # -----------------------------------------------------------------------------
-# Bipolar TEC sub-region analysis: individual PAIRWISE comparisons (not pooled)
+# Cluster 7 sub-region analysis: individual PAIRWISE comparisons (not pooled)
 # -----------------------------------------------------------------------------
 Idents(samples) <- "ident_for_c7_analysis"
 stopifnot(all(as.character(Idents(samples)) == unname(samples$ident_for_c7_analysis)))
@@ -3005,7 +3006,7 @@ ggsave(paste0(DATE_PREFIX, "-c7-subregion-genes-POOLED-whole-dataset-violin.png"
 # -----------------------------------------------------------------------------
 # Heatmap: top 5 genes from the POOLED vs-OTHER3-internal analysis for each
 # c7 sub-region, shown across all whole-dataset cell types -- same style as
-# the established Select Markers / PolyKRT / Bautista / Bipolar TEC heatmaps
+# the established Select Markers / PolyKRT / Bautista / Cluster 7 heatmaps
 # -----------------------------------------------------------------------------
 genes_pooled_check <- c(
   "CD4", "SPN", "CD96", "RHOH", "CD247",             # near_Nurse (pooled)
@@ -3022,7 +3023,7 @@ if (length(missing_genes) > 0) {
 stopifnot(length(genes_pooled_check) > 0)
 
 celltype_order <- c("Nurse", "cTEC", "BMC TEC", "mTEC lo", "mTEC hi",
-                    "Mimetic", "Bipolar TEC", "Endothelial", "Pericyte", "Erythroid")
+                    "Mimetic", "Cluster 7", "Endothelial", "Pericyte", "Erythroid")
 
 # sanity check: confirm celltype_order matches the object's actual current levels
 current_levels <- levels(droplevels(samples$cell_type_unintegrated))
@@ -3076,7 +3077,7 @@ ggsave(paste0(DATE_PREFIX, "-c7-subregion-genes-POOLED-heatmap.pdf"),
 # Correlation analysis: average expression profile of each c7 sub-region vs.
 # every real cell type in the All -- ordered to match the
 # established project convention (Nurse, cTEC, BMC TEC, mTEC lo, mTEC hi,
-# Mimetic, Endothelial, Bipolar TEC, Pericyte, Erythroid)
+# Mimetic, Endothelial, Cluster 7, Pericyte, Erythroid)
 # -----------------------------------------------------------------------------
 Idents(samples) <- "ident_for_c7_analysis"
 # sanity check: confirm Idents matches the c7 sub-region metadata column
@@ -3085,7 +3086,7 @@ stopifnot(all(as.character(Idents(samples)) == unname(samples$ident_for_c7_analy
 subregions <- c("near_mTEC_hi", "near_mTEC_lo", "near_cTEC", "near_Nurse")
 
 celltype_order <- c("Nurse", "cTEC", "BMC TEC", "mTEC lo", "mTEC hi",
-                    "Mimetic", "Bipolar TEC","Endothelial", "Pericyte", "Erythroid")
+                    "Mimetic", "Cluster 7","Endothelial", "Pericyte", "Erythroid")
 
 # sanity check: confirm celltype_order matches the object's actual current levels
 current_levels <- levels(droplevels(samples$cell_type_unintegrated))
@@ -3149,7 +3150,7 @@ p_cor_heatmap <- ggplot(df_cor, aes(x = cell_type, y = subregion, fill = r)) +
   geom_text(aes(label = round(r, 2)), size = 3) +
   scale_fill_gradient2(low = "#F7E27A", mid = "grey95", high = "#1B3B6F",
                        midpoint = median(df_cor$r), name = "Pearson\nr") +
-  labs(title = "Bipolar TEC sub-region vs. whole-dataset cell type correlation",
+  labs(title = "Cluster 7 sub-region vs. whole-dataset cell type correlation",
        x = NULL, y = NULL) +
   theme_minimal(base_size = 10) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
@@ -3170,7 +3171,7 @@ ggsave(paste0(DATE_PREFIX, "-c7-subregion-celltype-correlation-heatmap.pdf"),
 
 
 # -----------------------------------------------------------------------------
-# Large heatmap: top 100 genes for cluster 7 (Bipolar TEC), mapped across its
+# Large heatmap: top 100 genes for cluster 7 (Cluster 7), mapped across its
 # 4 sub-regions -- 100 rows x 4 columns
 # -----------------------------------------------------------------------------
 
@@ -3242,7 +3243,7 @@ p_c7_top100_heatmap <- ggplot(df_c7_top100, aes(x = subregion, y = gene, fill = 
     low = "#F7E27A", mid = "grey95", high = "#1B3B6F",
     midpoint = 0, name = "Relative\nexpr. (z)"
   ) +
-  labs(title = "Cluster 7 (Bipolar TEC) top 100 genes across sub-regions") +
+  labs(title = "Cluster 7 (Cluster 7) top 100 genes across sub-regions") +
   theme_minimal(base_size = 6) +
   theme(
     axis.title  = element_blank(),
@@ -3259,7 +3260,7 @@ ggsave(paste0(DATE_PREFIX, "-c7-top100-genes-by-subregion-heatmap.pdf"),
 
 
 # -----------------------------------------------------------------------------
-# VlnPlot: nFeature_RNA across the 4 Bipolar TEC (cluster 7) sub-regions
+# VlnPlot: nFeature_RNA across the 4 Cluster 7 (cluster 7) sub-regions
 # -----------------------------------------------------------------------------
 subregion_order <- c("near_Nurse", "near_cTEC", "near_mTEC_lo", "near_mTEC_hi")
 
@@ -3277,7 +3278,7 @@ p_nfeature_c7 <- VlnPlot(
   samples_c7_subregions, features = "nFeature_RNA",
   group.by = "ident_for_c7_analysis", pt.size = 0.2
 ) +
-  labs(title = "nFeature_RNA across Bipolar TEC sub-regions", x = "Sub-region")
+  labs(title = "nFeature_RNA across Cluster 7 sub-regions", x = "Sub-region")
 
 print(p_nfeature_c7)
 ggsave(paste0(DATE_PREFIX, "-c7-subregions-nFeature-violin.pdf"),
@@ -3300,7 +3301,7 @@ neighbor_map <- list(
 
 all_neighbor_clusters <- unique(unlist(neighbor_map))
 # sanity check: confirm all neighbor cluster IDs exist in the object
-stopifnot(all(all_neighbor_clusters %in% levels(samples$clusters_unintegrated)))
+stopifnot(all(all_neighbor_clusters %in% levels(samples$seurat_clusters)))
 cat("Neighbor clusters to correlate against:", paste(all_neighbor_clusters, collapse = ", "), "\n")
 
 subregion_order <- c("near_mTEC_hi","near_mTEC_lo","near_cTEC","near_Nurse")
@@ -3319,11 +3320,11 @@ avg_subregions <- avg_all_groups_c7[, subregion_order_sanitized]
 colnames(avg_subregions) <- subregion_order
 
 # -- Average expression per individual neighbor cluster --
-samples_neighbors_only <- subset(samples, subset = clusters_unintegrated %in% all_neighbor_clusters)
+samples_neighbors_only <- subset(samples, subset = seurat_clusters %in% all_neighbor_clusters)
 
 avg_all_neighbors <- AverageExpression(
   samples_neighbors_only, features = VariableFeatures(samples), assay = "RNA",
-  group.by = "clusters_unintegrated", verbose = TRUE
+  group.by = "seurat_clusters", verbose = TRUE
 )$RNA
 
 # AverageExpression() prefixes numeric-starting group names with "g" (e.g.
@@ -3371,7 +3372,7 @@ p_cor_neighbors <- ggplot(df_cor_neighbors, aes(x = neighbor_cluster, y = subreg
   geom_text(aes(label = round(r, 2)), size = 3) +
   scale_fill_gradient2(low = "#F7E27A", mid = "grey95", high = "#1B3B6F",
                        midpoint = median(df_cor_neighbors$r), name = "Pearson\nr") +
-  labs(title = "Bipolar TEC sub-region vs. manually assigned neighbor cluster correlation",
+  labs(title = "Cluster 7 sub-region vs. manually assigned neighbor cluster correlation",
        x = "Neighbor cluster", y = NULL) +
   theme_minimal(base_size = 10) +
   theme(panel.grid = element_blank())
@@ -3468,7 +3469,7 @@ print(tra_summary)
 
 p_tra_c7 <- VlnPlot(samples_c7_subregions, features = "HPA_TRA_score",
                     group.by = "ident_for_c7_analysis", pt.size = 0.2) +
-  labs(title = "HPA-based TRA module score across Bipolar TEC sub-regions",
+  labs(title = "HPA-based TRA module score across Cluster 7 sub-regions",
        x = "Sub-region")
 print(p_tra_c7)
 ggsave(paste0(DATE_PREFIX, "-c7-subregions-HPA-TRA-score-violin.pdf"),
@@ -3512,7 +3513,7 @@ stopifnot(length(hk_genes) > 1000)  # sanity floor -- expected ~3804
 
 # -- Empirically derive "shared TEC" genes from this dataset --
 tec_lineage_types <- c("Nurse", "cTEC", "BMC TEC", "mTEC lo", "mTEC hi",
-                       "Mimetic", "Bipolar TEC")
+                       "Mimetic", "Cluster 7")
 
 # sanity check: confirm these are the object's actual TEC-lineage levels
 current_levels <- levels(droplevels(samples$cell_type_unintegrated))
@@ -3561,7 +3562,7 @@ subregion_order <- c("near_Nurse", "near_cTEC", "near_mTEC_lo", "near_mTEC_hi")
 subregion_order <- c("near_mTEC_hi","near_mTEC_lo","near_cTEC","near_Nurse")
 subregion_order_sanitized <- gsub("_", "-", subregion_order)
 celltype_order <- c("Nurse", "cTEC", "BMC TEC", "mTEC lo", "mTEC hi",
-                    "Mimetic", "Bipolar TEC", "Endothelial", "Pericyte", "Erythroid")
+                    "Mimetic", "Cluster 7", "Endothelial", "Pericyte", "Erythroid")
 
 avg_all_groups <- AverageExpression(
   samples, features = genes_for_correlation, assay = "RNA",
@@ -3656,17 +3657,17 @@ ggsave(paste0(DATE_PREFIX, "-c7-subregion-celltype-correlation-genesubtracted-he
 
 
 # =============================================================================
-# Bipolar TEC standalone re-embedding: subset, wipe stale reductions,
+# Cluster 7 standalone re-embedding: subset, wipe stale reductions,
 # fresh PCA/UMAP/clustering on just these cells. c7_subregion carried along
 # as a cross-reference label only, NOT used to build the embedding.
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# Step 1: Subset to Bipolar TEC cells only
+# Step 1: Subset to Cluster 7 cells only
 # -----------------------------------------------------------------------------
-bipolar_standalone <- subset(samples, subset = clusters_unintegrated == "7")
+bipolar_standalone <- subset(samples, subset = seurat_clusters == "7")
 
-cat("Bipolar TEC standalone cell count:", ncol(bipolar_standalone), "\n")
+cat("Cluster 7 standalone cell count:", ncol(bipolar_standalone), "\n")
 stopifnot(ncol(bipolar_standalone) == 1264)
 
 cat("\nc7_subregion distribution (carried along, not used for clustering):\n")
@@ -3698,7 +3699,7 @@ bipolar_standalone <- ScaleData(bipolar_standalone, verbose = TRUE)
 bipolar_standalone <- RunPCA(bipolar_standalone, npcs = 30, verbose = TRUE)
 
 p_elbow <- ElbowPlot(bipolar_standalone, ndims = 30) +
-  labs(title = "Bipolar TEC standalone PCA: elbow plot")
+  labs(title = "Cluster 7 standalone PCA: elbow plot")
 print(p_elbow)
 ggsave(paste0(DATE_PREFIX, "-bipolar-standalone-elbow.pdf"), p_elbow, width = 6, height = 5)
 
@@ -3810,8 +3811,8 @@ saveRDS(bipolar_standalone, paste0(DATE_PREFIX, "-bipolar-TEC-standalone.rds"))
 
 # highlight individual clusters overlay over the entire umap
 highlight_cluster <- function(cluster_num) {
-  DimPlot(samples, reduction = "umap_unintegrated",
-          cells.highlight = WhichCells(samples, expression = clusters_unintegrated == as.character(cluster_num))) +
+  DimPlot(samples, reduction = "umap",
+          cells.highlight = WhichCells(samples, expression = seurat_clusters == as.character(cluster_num))) +
     scale_color_manual(values = c("grey80", "red"), labels = c("Other", paste0("Cluster ", cluster_num))) +
     labs(title = paste0("Cluster ", cluster_num, " highlighted"))
 }
@@ -3844,8 +3845,8 @@ highlight_cluster(24)
 highlight_cluster(25)
 
 # visualize clusters on umap 
-DimPlot(samples, reduction = "umap_unintegrated",
-        group.by = "clusters_unintegrated", label = TRUE) +
+DimPlot(samples, reduction = "umap",
+        group.by = "seurat_clusters", label = TRUE) +
   labs(title = "Unintegrated: clusters")
 
 DimPlot(samples, reduction = "umap_harmony",
@@ -3853,9 +3854,9 @@ DimPlot(samples, reduction = "umap_harmony",
   labs(title = "Harmony-integrated: clusters")
 
 DimPlot(
-  samples, reduction = "umap_unintegrated", label = TRUE,
-  group.by = "clusters_unintegrated",
-  cells.highlight = WhichCells(samples, expression = clusters_unintegrated == "7")
+  samples, reduction = "umap", label = TRUE,
+  group.by = "seurat_clusters",
+  cells.highlight = WhichCells(samples, expression = seurat_clusters == "7")
 ) +
   labs(title = "Unintegrated: cluster 7 highlighted") +
   scale_color_manual(values = c("grey80", "red"), labels = c("Other", "Cluster 7"))
@@ -3867,7 +3868,7 @@ DimPlot(
   labs(title = "Harmony: cluster 6 highlighted") +
   scale_color_manual(values = c("grey80", "red"), labels = c("Other", "Cluster 6"))
 
-p_full_reference <- DimPlot(samples, reduction = "umap_unintegrated",
+p_full_reference <- DimPlot(samples, reduction = "umap",
                             group.by = "cell_type_unintegrated", label = TRUE, repel = TRUE) +
   labs(title = "Full annotated UMAP (unintegrated) -- for spatial reference")
 print(p_full_reference)
